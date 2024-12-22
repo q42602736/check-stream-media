@@ -652,7 +652,8 @@ createJsonTemplate() {
     "DisneyPlus": "DisneyPlus_result",
     "OpenAI": "OpenAI_result",
     "DiscoveryPlus": "DiscoveryPlus_result",
-    "ParamountPlus": "ParamountPlus_result"
+    "ParamountPlus": "ParamountPlus_result",
+    "BahamutAnime": "BahamutAnime_result"
 }' > /root/media_test_tpl.json
 }
 
