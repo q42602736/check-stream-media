@@ -695,13 +695,13 @@ setCronTask() {
         echo "[6] 8小时"
         echo "[7] 12小时"
         echo "[8] 24小时"
-        echo "[9] 不设置"
         echo
         read -p "$(blue) 请选择检测频率并输入序号 (例如: 1):" time_interval_id
 
-        if [[ "${time_interval_id}" == "9" ]]; then
-            echo -e "$(green) 跳过定时任务设置"
-            return
+        # 检查是否为空输入
+        if [[ -z "${time_interval_id}" ]]; then
+            echo -e "$(red) 输入不能为空，请输入1-8之间的数字"
+            continue
         fi
 
         if ! [[ "${time_interval_id}" =~ ^[1-8]$ ]]; then
@@ -724,7 +724,7 @@ setCronTask() {
 
         # 下载脚本文件
         if [[ ! -f "/root/csm.sh" ]]; then
-            echo -e "$(green) 正在下载脚本到 /root/csm.sh 用于定时任务..."
+            echo -e "$(green) 正在��载脚本到 /root/csm.sh 用于定时任务..."
             curl -Ls https://raw.githubusercontent.com/q42602736/check-stream-media/main/csm.sh -o /root/csm.sh
             chmod +x /root/csm.sh
         fi
@@ -791,11 +791,11 @@ checkConfig() {
 
 postData() {
     if [[ ! -e "/root/.csm.config" ]];then
-        echo -e "$(red) Missing configuration file."
+        echo -e "$(red) 配置文件丢失"
         exit
     fi
     if [[ ! -e "/root/media_test_tpl.json" ]];then
-        echo -e "$(red) Missing detection report."
+        echo -e "$(red) 检测报告丢失"
         exit
     fi
 
@@ -856,7 +856,7 @@ getDNSConfig() {
     read -p "$(blue "请输入用于Disney+解锁检测的DNS服务器地址 (直接回车使用系统默认DNS): ")" disney_dns
     if [[ -n "${disney_dns}" ]]; then
         echo "${disney_dns}" > /root/.csm.dns.disney
-        echo -e "$(green) Disney+ DNS服务器已设置���: ${disney_dns}"
+        echo -e "$(green) Disney+ DNS服务器已设置为: ${disney_dns}"
     else
         echo -e "$(green) Disney+检测将使用系统默认DNS服务器"
         rm -f /root/.csm.dns.disney
