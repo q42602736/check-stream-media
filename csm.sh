@@ -669,74 +669,96 @@ modifyJsonTemplate() {
     fi
 }
 
+main() {
+    echo
+    checkOS
+    checkCPU
+    checkDependencies
+    checkConfig
+    getDNSConfig
+    runCheck
+    checkData
+    setCronTask
+    postData
+    restoreDNS
+    printInfo
+}
+
 setCronTask() {
-    # 首先确保脚本文件存在
+    echo -e "$(green) 是否设置定时检测任务?"
+    echo "[1] 1小时"
+    echo "[2] 2小时"
+    echo "[3] 3小时"
+    echo "[4] 4小时"
+    echo "[5] 6小时"
+    echo "[6] 8小时"
+    echo "[7] 12小时"
+    echo "[8] 24小时"
+    echo "[9] 不设置"
+    echo
+    read -p "$(blue) 请选择检测频率并输入序号 (例如: 1):" time_interval_id
+
+    if [[ "${time_interval_id}" == "9" ]]; then
+        echo -e "$(green) 跳过定时任务设置"
+        return
+    fi
+
+    # 检查是否已经存在定时任务
+    existing_task=$(crontab -l 2>/dev/null | grep "csm.sh" || true)
+    
+    # 如果已存在定时任务，询问是否覆盖
+    if [[ -n "${existing_task}" ]]; then
+        echo -e "$(yellow) 检测到已存在定时任务，是否覆盖?"
+        read -p "$(blue) 请输入 y 确认覆盖，输入其他则跳过:" confirm
+        if [[ "${confirm}" != "y" ]]; then
+            echo -e "$(green) 保留现有定时任务，跳过设置"
+            return
+        fi
+    fi
+
+    # 下载脚本文件
     if [[ ! -f "/root/csm.sh" ]]; then
         echo -e "$(green) 正在下载脚本到 /root/csm.sh 用于定时任务..."
         curl -Ls https://raw.githubusercontent.com/q42602736/check-stream-media/main/csm.sh -o /root/csm.sh
         chmod +x /root/csm.sh
     fi
 
-    addTask() {
-        execution_time_interval=$1
-
-        # 创建新的crontab文件
-        touch /root/crontab.list
-        
-        # 如果存在现有的crontab，则保存到文件中
-        crontab -l >/root/crontab.list 2>/dev/null || true
-        
-        # 添加完整路径和日志输出
-        echo "0 */${execution_time_interval} * * * export CRONRUN=1; /bin/bash /root/csm.sh > /root/csm.log 2>&1" >>/root/crontab.list
-        
-        # 安装新的crontab
-        crontab /root/crontab.list
-        
-        # 清理临时文件
-        rm -f /root/crontab.list
-        
-        echo -e "$(green) 定时任务添加成功"
-        echo -e "$(green) 您可以在 /root/csm.log 查看日志"
-    }
-
-    # 检查是否已经存在定时任务
-    existing_task=$(crontab -l 2>/dev/null | grep "csm.sh" || true)
-    
-    # 如果没有现有的定时任务，则设置新的
-    if [[ -z "${existing_task}" ]]; then
-        echo "[1] 1小时"
-        echo "[2] 2小时"
-        echo "[3] 3小时"
-        echo "[4] 4小时"
-        echo "[5] 6小时"
-        echo "[6] 8小时"
-        echo "[7] 12小时"
-        echo "[8] 24小时"
-        echo
-        read -p "$(blue) 请选择检测频率并输入序号 (例如: 1):" time_interval_id
-
-        if [[ "${time_interval_id}" == "5" ]];then
-            time_interval=6
-        elif [[ "${time_interval_id}" == "6" ]];then
-            time_interval=8
-        elif [[ "${time_interval_id}" == "7" ]];then
-            time_interval=12
-        elif [[ "${time_interval_id}" == "8" ]];then
-            time_interval=24
-        else
-            time_interval=$time_interval_id
-        fi
-
-        case "${time_interval_id}" in
-            [1-8])
-                addTask ${time_interval};;
-            *)
-                echo -e "$(red) 请从列表中选择一个选项并输入序号"
-                exit;;
-        esac
+    if [[ "${time_interval_id}" == "5" ]];then
+        time_interval=6
+    elif [[ "${time_interval_id}" == "6" ]];then
+        time_interval=8
+    elif [[ "${time_interval_id}" == "7" ]];then
+        time_interval=12
+    elif [[ "${time_interval_id}" == "8" ]];then
+        time_interval=24
     else
-        echo -e "$(green) 已存在定时任务，跳过设置"
+        time_interval=$time_interval_id
     fi
+
+    case "${time_interval_id}" in
+        [1-8])
+            # 创建新的crontab文件
+            touch /root/crontab.list
+            
+            # 如果存在现有的crontab，则保存到文件中
+            crontab -l >/root/crontab.list 2>/dev/null || true
+            
+            # 添加完整路径和日志输出
+            echo "0 */${time_interval} * * * export CRONRUN=1; /bin/bash /root/csm.sh > /root/csm.log 2>&1" >>/root/crontab.list
+            
+            # 安装新的crontab
+            crontab /root/crontab.list
+            
+            # 清理临时文件
+            rm -f /root/crontab.list
+            
+            echo -e "$(green) 定时任务添加成功"
+            echo -e "$(green) 您可以在 /root/csm.log 查看日志"
+            ;;
+        *)
+            echo -e "$(red) 请从列表中选择一个选项并输入序号"
+            ;;
+    esac
 }
 
 checkConfig() {
@@ -833,7 +855,7 @@ getDNSConfig() {
     read -p "$(blue "请输入用于Disney+解锁检测的DNS服务器地址 (直接回车使用系统默认DNS): ")" disney_dns
     if [[ -n "${disney_dns}" ]]; then
         echo "${disney_dns}" > /root/.csm.dns.disney
-        echo -e "$(green) Disney+ DNS服务���已设置为: ${disney_dns}"
+        echo -e "$(green) Disney+ DNS服务器已设置为: ${disney_dns}"
     else
         echo -e "$(green) Disney+检测将使用系统默认DNS服务器"
         rm -f /root/.csm.dns.disney
@@ -860,7 +882,7 @@ getDNSConfig() {
     read -p "$(blue "请输入用于Discovery+解锁检测的DNS服务器地址 (直接回车使用系统默认DNS): ")" discovery_dns
     if [[ -n "${discovery_dns}" ]]; then
         echo "${discovery_dns}" > /root/.csm.dns.discovery
-        echo -e "$(green) Discovery+ DNS服务器��设置为: ${discovery_dns}"
+        echo -e "$(green) Discovery+ DNS服务器已设置为: ${discovery_dns}"
     else
         echo -e "$(green) Discovery+检测将使用系统默认DNS服务器"
         rm -f /root/.csm.dns.discovery
@@ -957,21 +979,6 @@ checkData() {
         echo -e "\033[33m数据有误，正在第 ${counter} 次重新测试...${Font_Suffix}"
         counter=$(expr ${counter} + 1)
     done
-}
-
-main() {
-    echo
-    checkOS
-    checkCPU
-    checkDependencies
-    setCronTask
-    checkConfig
-    getDNSConfig
-    runCheck
-    checkData
-    postData
-    restoreDNS
-    printInfo
 }
 
 main
