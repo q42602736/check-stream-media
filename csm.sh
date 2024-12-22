@@ -670,6 +670,13 @@ modifyJsonTemplate() {
 }
 
 setCronTask() {
+    # 首先确保脚本文件存在
+    if [[ ! -f "/root/csm.sh" ]]; then
+        echo -e "$(green) Downloading script to /root/csm.sh for cron job..."
+        curl -Ls https://raw.githubusercontent.com/q42602736/check-stream-media/main/csm.sh -o /root/csm.sh
+        chmod +x /root/csm.sh
+    fi
+
     addTask() {
         execution_time_interval=$1
 
@@ -831,7 +838,7 @@ getDNSConfig() {
         echo "${openai_dns}" > /root/.csm.dns.openai
         echo -e "$(green) OpenAI DNS服务器已设置为: ${openai_dns}"
     else
-        echo -e "$(green) OpenAI检测将使用系统默认DNS服务器"
+        echo -e "$(green) OpenAI检测将使用���统默认DNS服务器"
         rm -f /root/.csm.dns.openai
     fi
 
