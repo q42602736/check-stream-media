@@ -672,7 +672,7 @@ modifyJsonTemplate() {
 setCronTask() {
     # 首先确保脚本文件存在
     if [[ ! -f "/root/csm.sh" ]]; then
-        echo -e "$(green) Downloading script to /root/csm.sh for cron job..."
+        echo -e "$(green) 正在下载脚本到 /root/csm.sh 用于定时任务..."
         curl -Ls https://raw.githubusercontent.com/q42602736/check-stream-media/main/csm.sh -o /root/csm.sh
         chmod +x /root/csm.sh
     fi
@@ -685,22 +685,22 @@ setCronTask() {
         echo "0 */${execution_time_interval} * * * export CRONRUN=1; /bin/bash /root/csm.sh > /root/csm.log 2>&1" >>/root/crontab.list
         crontab /root/crontab.list
         rm -rf /root/crontab.list
-        echo -e "$(green) The scheduled task is added successfully."
-        echo -e "$(green) You can check the log at /root/csm.log"
+        echo -e "$(green) 定时任务添加成功"
+        echo -e "$(green) 您可以在 /root/csm.log 查看日志"
     }
 
     crontab -l | grep "csm.sh" >/dev/null
     if [[ "$?" != "0" ]]; then
-        echo "[1] 1 hour"
-        echo "[2] 2 hour"
-        echo "[3] 3 hour"
-        echo "[4] 4 hour"
-        echo "[5] 6 hour"
-        echo "[6] 8 hour"
-        echo "[7] 12 hour"
-        echo "[8] 24 hour"
+        echo "[1] 1小时"
+        echo "[2] 2小时"
+        echo "[3] 3小时"
+        echo "[4] 4小时"
+        echo "[5] 6小时"
+        echo "[6] 8小时"
+        echo "[7] 12小时"
+        echo "[8] 24小时"
         echo
-        read -p "$(blue) Please select the detection frequency and enter the serial number (eg: 1):" time_interval_id
+        read -p "$(blue) 请选择检测频率并输入序号 (例如: 1):" time_interval_id
 
         if [[ "${time_interval_id}" == "5" ]];then
             time_interval=6
@@ -718,7 +718,7 @@ setCronTask() {
             [1-8])
                 addTask ${time_interval};;
             *)
-                echo -e "$(red) Choose one from the list given and enter the sequence number."
+                echo -e "$(red) 请从列表中选择一个选项并输入序号"
                 exit;;
         esac
     fi
@@ -726,18 +726,18 @@ setCronTask() {
 
 checkConfig() {
     getConfig() {
-        read -p "$(blue) Please enter the panel address (eg: https://demo.sspanel.org):" panel_address
-        read -p "$(blue) Please enter the mu key:" mu_key
-        read -p "$(blue) Please enter the node id:" node_id
+        read -p "$(blue) 请输入面板地址 (例如: https://demo.sspanel.org):" panel_address
+        read -p "$(blue) 请输入mu key:" mu_key
+        read -p "$(blue) 请输入节点ID:" node_id
 
         if [[ "${panel_address}" = "" ]] || [[ "${mu_key}" = "" ]];then
-            echo -e "$(red) Complete all necessary parameter entries."
+            echo -e "$(red) 请完成所有必要的参数输入"
             exit
         fi
 
         curl -s "${panel_address}/mod_mu/nodes?key=${mu_key}" | grep "invalid" > /dev/null
         if [[ "$?" = "0" ]];then
-            echo -e "$(red) Wrong website address or mukey error, please try again."
+            echo -e "$(red) 网站地址或mukey错误，请重试"
             exit
         fi
 
@@ -778,11 +778,11 @@ printInfo() {
     color_end='\033[0m'
 
     echo
-    echo -e "${green_start}The code for this script to detect streaming media unlocking is all from the open source project https://github.com/lmc999/RegionRestrictionCheck , and the open source protocol is AGPL-3.0. This script is open source as required by the open source license. Thanks to the original author @lmc999 and everyone who made the pull request for this project for their contributions.${color_end}"
+    echo -e "${green_start}本脚本用于检测流媒体解锁的代码全部来自开源项目 https://github.com/lmc999/RegionRestrictionCheck，开源协议为 AGPL-3.0。按照开源许可要求，本脚本同样开源。感谢原作者 @lmc999 以及为该项目提交 pull request 的所有人的贡献。${color_end}"
     echo
-    echo -e "${green_start}Project: https://github.com/iamsaltedfish/check-stream-media${color_end}"
-    echo -e "${green_start}Version: 2023-08-07 v.2.0.1${color_end}"
-    echo -e "${green_start}Author: @iamsaltedfish${color_end}"
+    echo -e "${green_start}项目地址: https://github.com/iamsaltedfish/check-stream-media${color_end}"
+    echo -e "${green_start}版本: 2023-08-07 v.2.0.1${color_end}"
+    echo -e "${green_start}作者: @iamsaltedfish${color_end}"
 }
 
 # 在文件开头添加 UUID 生成函数
@@ -793,12 +793,12 @@ gen_uuid() {
 getDNSConfig() {
     # 检查是否是定时任务运行
     if [[ -n "${CRONRUN}" ]]; then
-        echo -e "$(green) Running as cron job, checking saved DNS configurations..."
+        echo -e "$(green) 正在以定时任务方式运行，检查已保存的DNS配置..."
         for service in netflix disney youtube openai discovery paramount bahamut; do
             if [[ -f "/root/.csm.dns.${service}" ]]; then
                 dns_server=$(cat "/root/.csm.dns.${service}")
                 if [[ -n "${dns_server}" ]]; then
-                    echo -e "$(green) Using saved DNS for ${service}: ${dns_server}"
+                    echo -e "$(green) 使用已保存的${service}的DNS服务器: ${dns_server}"
                 fi
             fi
         done
@@ -838,7 +838,7 @@ getDNSConfig() {
         echo "${openai_dns}" > /root/.csm.dns.openai
         echo -e "$(green) OpenAI DNS服务器已设置为: ${openai_dns}"
     else
-        echo -e "$(green) OpenAI检测将使用���统默认DNS服务器"
+        echo -e "$(green) OpenAI检测将使用系统默认DNS服务器"
         rm -f /root/.csm.dns.openai
     fi
 
@@ -880,7 +880,7 @@ setDNSForTest() {
     if [[ -f "/root/.csm.dns.${service}" ]]; then
         dns_server=$(cat "/root/.csm.dns.${service}")
         if [[ -n "${dns_server}" ]]; then
-            echo -e "$(green) Setting DNS for ${service} to: ${dns_server}"
+            echo -e "$(green) 正在为 ${service} 设置DNS: ${dns_server}"
             echo "nameserver ${dns_server}" > /etc/resolv.conf
         fi
     fi
@@ -931,8 +931,7 @@ runCheck() {
     restoreDNS
 }
 
-checkData()
-{
+checkData() {
     counter=0
     max_check_num=3
     cat /root/media_test_tpl.json | grep "_result" > /dev/null
@@ -940,7 +939,7 @@ checkData()
     do
         sleep 1
         runCheck > /dev/null
-        echo -e "\033[33mThere is something wrong with the data and it is being retested for the ${counter} time...\033[0m"
+        echo -e "\033[33m数据有误，正在第 ${counter} 次重新测试...${Font_Suffix}"
         counter=$(expr ${counter} + 1)
     done
 }
