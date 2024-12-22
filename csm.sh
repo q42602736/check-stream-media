@@ -680,16 +680,27 @@ setCronTask() {
     addTask() {
         execution_time_interval=$1
 
-        crontab -l >/root/crontab.list 2>/dev/null
+        # 创建新的crontab文件
+        touch /root/crontab.list
+        
+        # 如果存在现有的crontab，则保存到文件中
+        crontab -l >/root/crontab.list 2>/dev/null || true
+        
         # 添加完整路径和日志输出
         echo "0 */${execution_time_interval} * * * export CRONRUN=1; /bin/bash /root/csm.sh > /root/csm.log 2>&1" >>/root/crontab.list
+        
+        # 安装新的crontab
         crontab /root/crontab.list
-        rm -rf /root/crontab.list
+        
+        # 清理临时文件
+        rm -f /root/crontab.list
+        
         echo -e "$(green) 定时任务添加成功"
         echo -e "$(green) 您可以在 /root/csm.log 查看日志"
     }
 
-    crontab -l | grep "csm.sh" >/dev/null
+    # 尝试检查现有的crontab，如果失败也继续执行
+    crontab -l | grep "csm.sh" >/dev/null 2>&1 || true
     if [[ "$?" != "0" ]]; then
         echo "[1] 1小时"
         echo "[2] 2小时"
