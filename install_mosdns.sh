@@ -234,6 +234,39 @@ uninstall_mosdns() {
     echo -e "${GREEN}MosDNS 已完全卸载${PLAIN}"
 }
 
+# 检查 MosDNS 状态
+check_mosdns_status() {
+    echo -e "${GREEN}正在检查 MosDNS 状态...${PLAIN}"
+    
+    # 检查服务状态
+    local service_status=$(systemctl is-active mosdns)
+    echo -e "服务状态: ${service_status}"
+    
+    # 检查 DNS 解析
+    echo -e "\n测试 DNS 解析:"
+    echo -e "系统 DNS 配置:"
+    cat /etc/resolv.conf
+    
+    echo -e "\n解析测试:"
+    echo -n "解析 google.com: "
+    dig +short google.com @127.0.0.1
+    
+    echo -n "解析 baidu.com: "
+    dig +short baidu.com @127.0.0.1
+    
+    # 检查日志
+    echo -e "\n最近的日志:"
+    tail -n 5 /var/log/mosdns.log
+}
+
+# 重启 MosDNS
+restart_mosdns() {
+    echo -e "${GREEN}正在重启 MosDNS...${PLAIN}"
+    systemctl restart mosdns
+    sleep 2
+    check_mosdns_status
+}
+
 # 主函数
 main() {
     clear
@@ -244,9 +277,11 @@ main() {
     echo "------------------------"
     echo -e "1. 安装 MosDNS"
     echo -e "2. 卸载 MosDNS"
+    echo -e "3. 查看 MosDNS 状态"
+    echo -e "4. 重启 MosDNS"
     echo "------------------------"
     
-    read -p "请输入选项 [1-2]: " option
+    read -p "请输入选项 [1-4]: " option
     
     case "${option}" in
         1)
@@ -294,10 +329,22 @@ main() {
             echo -e "${GREEN}默认 DNS：${default_dns}, 1.1.1.1, 8.8.8.8${PLAIN}"
             echo -e "${YELLOW}提示：如需恢复原始 DNS 配置，请执行：${PLAIN}"
             echo -e "${YELLOW}chattr -i /etc/resolv.conf && cp /etc/resolv.conf.backup /etc/resolv.conf${PLAIN}"
+            
+            # 安装完成后检查状态
+            echo -e "\n${GREEN}正在检查 MosDNS 状态...${PLAIN}"
+            check_mosdns_status
             ;;
         2)
             check_root
             uninstall_mosdns
+            ;;
+        3)
+            check_root
+            check_mosdns_status
+            ;;
+        4)
+            check_root
+            restart_mosdns
             ;;
         *)
             echo -e "${RED}错误：无效的选项${PLAIN}"
