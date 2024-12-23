@@ -355,64 +355,100 @@ MediaUnlockTest_Netflix() {
 }
 
 MediaUnlockTest_DisneyPlus() {
-    local result=$(curl $useNIC $usePROXY $xForward -${1} -sL --max-time 10 "https://disney.api.edge.bamgrid.com/graph/v1/device/graphql" -H "Accept-Language: en" -H "Authorization: ZGlzbmV5JmJyb3dzZXImMS4wLjA.Cu56AgSfBTDag5NiRA81oLHkDZfu5L3CKadnefEAY84" -d '{"query":"mutation registerDevice($input: RegisterDeviceInput!) { registerDevice(registerDevice: $input) { grant { grantType assertion } } }","variables":{"input":{"deviceFamily":"browser","applicationRuntime":"chrome","deviceProfile":"windows","attributes":{"osDeviceIds":[],"manufacturer":"microsoft","model":null,"operatingSystem":"windows","operatingSystemVersion":"10.0","browserName":"chrome","browserVersion":"94.0.4606"}}},"operationName":"registerDevice"}' 2>&1)
-    
-    if [[ "$result" == "curl"* ]]; then
+    local PreAssertion=$(curl $useNIC $usePROXY $xForward -${1} --user-agent "${UA_Browser}" -s --max-time 10 -X POST "https://disney.api.edge.bamgrid.com/devices" -H "authorization: Bearer ZGlzbmV5JmJyb3dzZXImMS4wLjA.Cu56AgSfBTDag5NiRA81oLHkDZfu5L3CKadnefEAY84" -H "content-type: application/json; charset=UTF-8" -d '{"deviceFamily":"browser","applicationRuntime":"chrome","deviceProfile":"windows","attributes":{}}' 2>&1)
+    if [[ "$PreAssertion" == "curl"* ]] && [[ "$1" == "6" ]]; then
+        echo -n -e "\r Disney+:\t\t\t\t${Font_Red}IPv6 Not Support${Font_Suffix}\n"
+        return
+    elif [[ "$PreAssertion" == "curl"* ]]; then
         echo -n -e "\r Disney+:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         modifyJsonTemplate 'DisneyPlus_result' 'Unknow'
         return
     fi
-    
-    local region=$(echo $result | grep -oE '"location":{"countryCode":"[A-Z]{2}' | cut -d'"' -f6)
-    local inSupportedLocation=$(echo $result | grep -oE '"inSupportedLocation":(true|false)' | cut -d':' -f2)
-    
-    if [[ "$region" == "" ]]; then
+
+    local assertion=$(echo $PreAssertion | python -m json.tool 2>/dev/null | grep assertion | cut -f4 -d'"')
+    local PreDisneyCookie=$(echo "$Media_Cookie" | sed -n '1p')
+    local disneycookie=$(echo $PreDisneyCookie | sed "s/DISNEYASSERTION/${assertion}/g")
+    local TokenContent=$(curl $useNIC $usePROXY $xForward -${1} --user-agent "${UA_Browser}" -s --max-time 10 -X POST "https://disney.api.edge.bamgrid.com/token" -H "authorization: Bearer ZGlzbmV5JmJyb3dzZXImMS4wLjA.Cu56AgSfBTDag5NiRA81oLHkDZfu5L3CKadnefEAY84" -d "$disneycookie" 2>&1)
+    local isBanned=$(echo $TokenContent | python -m json.tool 2>/dev/null | grep 'forbidden-location')
+    local is403=$(echo $TokenContent | grep '403 ERROR')
+
+    if [ -n "$isBanned" ] || [ -n "$is403" ]; then
         echo -n -e "\r Disney+:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
         modifyJsonTemplate 'DisneyPlus_result' 'No'
         return
     fi
-    
-    if [[ "$inSupportedLocation" == "true" ]]; then
+
+    local fakecontent=$(echo "$Media_Cookie" | sed -n '8p')
+    local refreshToken=$(echo $TokenContent | python -m json.tool 2>/dev/null | grep 'refresh_token' | awk '{print $2}' | cut -f2 -d'"')
+    local disneycontent=$(echo $fakecontent | sed "s/ILOVEDISNEY/${refreshToken}/g")
+    local tmpresult=$(curl $useNIC $usePROXY $xForward -${1} --user-agent "${UA_Browser}" -X POST -sSL --max-time 10 "https://disney.api.edge.bamgrid.com/graph/v1/device/graphql" -H "authorization: ZGlzbmV5JmJyb3dzZXImMS4wLjA.Cu56AgSfBTDag5NiRA81oLHkDZfu5L3CKadnefEAY84" -d "$disneycontent" 2>&1)
+    local previewcheck=$(curl $useNIC $usePROXY $xForward -${1} -s -o /dev/null -L --max-time 10 -w '%{url_effective}\n' "https://disneyplus.com" | grep preview)
+    local isUnabailable=$(echo $previewcheck | grep 'unavailable')
+    local region=$(echo $tmpresult | python -m json.tool 2>/dev/null | grep 'countryCode' | cut -f4 -d'"')
+    local inSupportedLocation=$(echo $tmpresult | python -m json.tool 2>/dev/null | grep 'inSupportedLocation' | awk '{print $2}' | cut -f1 -d',')
+
+    if [[ "$region" == "JP" ]]; then
+        echo -n -e "\r Disney+:\t\t\t\t${Font_Green}Yes (Region: JP)${Font_Suffix}\n"
+        modifyJsonTemplate 'DisneyPlus_result' 'Yes' 'JP'
+        return
+    elif [ -n "$region" ] && [[ "$inSupportedLocation" == "false" ]] && [ -z "$isUnabailable" ]; then
+        echo -n -e "\r Disney+:\t\t\t\t${Font_Yellow}Available For [Disney+ $region] Soon${Font_Suffix}\n"
+        modifyJsonTemplate 'DisneyPlus_result' 'No'
+        return
+    elif [ -n "$region" ] && [ -n "$isUnavailable" ]; then
+        echo -n -e "\r Disney+:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
+        modifyJsonTemplate 'DisneyPlus_result' 'No'
+        return
+    elif [ -n "$region" ] && [[ "$inSupportedLocation" == "true" ]]; then
         echo -n -e "\r Disney+:\t\t\t\t${Font_Green}Yes (Region: $region)${Font_Suffix}\n"
         modifyJsonTemplate 'DisneyPlus_result' 'Yes' "${region}"
         return
-    else
+    elif [ -z "$region" ]; then
         echo -n -e "\r Disney+:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
         modifyJsonTemplate 'DisneyPlus_result' 'No'
         return
+    else
+        echo -n -e "\r Disney+:\t\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        modifyJsonTemplate 'DisneyPlus_result' 'Unknow'
+        return
     fi
+
 }
 
 MediaUnlockTest_YouTube_Premium() {
-    local tmpresult=$(curl $useNIC $usePROXY $xForward -${1} -sL --max-time 10 "https://www.youtube.com/premium" -H "Accept-Language: en" 2>&1)
-    
+    local tmpresult=$(curl $useNIC $usePROXY $xForward --user-agent "${UA_Browser}" -${1} --max-time 10 -sSL -H "Accept-Language: en" -b "YSC=BiCUU3-5Gdk; CONSENT=YES+cb.20220301-11-p0.en+FX+700; GPS=1; VISITOR_INFO1_LIVE=4VwPMkB7W5A; PREF=tz=Asia.Shanghai; _gcl_au=1.1.1809531354.1646633279" "https://www.youtube.com/premium" 2>&1)
+
     if [[ "$tmpresult" == "curl"* ]]; then
         echo -n -e "\r YouTube Premium:\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         modifyJsonTemplate 'YouTube_Premium_result' 'Unknow'
         return
     fi
-    
-    local region=$(curl $useNIC $usePROXY $xForward -${1} -sL --max-time 10 "https://www.youtube.com/premium" -H "Accept-Language: en" | grep "countryCode" | sed 's/.*"countryCode"//' | cut -f2 -d'"')
-    local isAvailable=$(echo $tmpresult | grep "ytm-purchase-flow-container")
-    
-    if [[ -n "$isAvailable" ]]; then
-        if [[ -n "$region" ]]; then
-            echo -n -e "\r YouTube Premium:\t\t\t${Font_Green}Yes (Region: $region)${Font_Suffix}\n"
-            modifyJsonTemplate 'YouTube_Premium_result' 'Yes' "${region}"
-        else
-            echo -n -e "\r YouTube Premium:\t\t\t${Font_Green}Yes${Font_Suffix}\n"
-            modifyJsonTemplate 'YouTube_Premium_result' 'Yes'
-        fi
+
+    local isCN=$(echo $tmpresult | grep 'www.google.cn')
+    if [ -n "$isCN" ]; then
+        echo -n -e "\r YouTube Premium:\t\t\t${Font_Red}No${Font_Suffix} ${Font_Green} (Region: CN)${Font_Suffix} \n"
+        modifyJsonTemplate 'YouTube_Premium_result' 'No' 'CN'
+        return
+    fi
+    local isNotAvailable=$(echo $tmpresult | grep 'Premium is not available in your country')
+    local region=$(echo $tmpresult | grep "countryCode" | sed 's/.*"countryCode"//' | cut -f2 -d'"')
+    local isAvailable=$(echo $tmpresult | grep '/month')
+
+    if [ -n "$isNotAvailable" ]; then
+        echo -n -e "\r YouTube Premium:\t\t\t${Font_Red}No${Font_Suffix} \n"
+        modifyJsonTemplate 'YouTube_Premium_result' 'No'
+        return
+    elif [ -n "$isAvailable" ] && [ -n "$region" ]; then
+        echo -n -e "\r YouTube Premium:\t\t\t${Font_Green}Yes (Region: $region)${Font_Suffix}\n"
+        modifyJsonTemplate 'YouTube_Premium_result' 'Yes' "${region}"
+        return
+    elif [ -z "$region" ] && [ -n "$isAvailable" ]; then
+        echo -n -e "\r YouTube Premium:\t\t\t${Font_Green}Yes${Font_Suffix}\n"
+        modifyJsonTemplate 'YouTube_Premium_result' 'Yes'
         return
     else
-        if [[ -n "$region" ]]; then
-            echo -n -e "\r YouTube Premium:\t\t\t${Font_Red}No (Region: $region)${Font_Suffix}\n"
-            modifyJsonTemplate 'YouTube_Premium_result' 'No' "${region}"
-        else
-            echo -n -e "\r YouTube Premium:\t\t\t${Font_Red}No${Font_Suffix}\n"
-            modifyJsonTemplate 'YouTube_Premium_result' 'No'
-        fi
-        return
+        echo -n -e "\r YouTube Premium:\t\t\t${Font_Red}Failed${Font_Suffix}\n"
+        modifyJsonTemplate 'YouTube_Premium_result' 'Unknow'
     fi
 }
 
@@ -423,25 +459,70 @@ MediaUnlockTest_DiscoveryPlus() {
         return
     fi
 
-    local result=$(curl $useNIC $usePROXY $xForward -${1} ${ssll} -sL --max-time 10 \
-        -H 'Accept: */*' \
-        -H 'Accept-Language: en-US,en;q=0.9' \
-        -H 'Origin: https://www.discoveryplus.com' \
-        -H 'Referer: https://www.discoveryplus.com/' \
-        -H 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36' \
-        "https://us1-prod-direct.discoveryplus.com/token?deviceId=d1a4a5d25212400f1b6cd3ee44b336fd&realm=go&shortlived=true" 2>&1)
-    
-    if [[ "$result" == "curl"* ]] || [[ "$result" == "" ]]; then
+    # 取得 API 网址
+    local tmpresult=$(curl $useNIC $usePROXY $xForward -${1} ${ssll} -s 'https://global-prod.disco-api.com/bootstrapInfo' -H 'accept: */*' -H 'accept-language: en-US,en;q=0.9' -H 'origin: https://www.discoveryplus.com' -H 'referer: https://www.discoveryplus.com/' -H "sec-ch-ua: ${UA_SEC_CH_UA}" -H 'sec-ch-ua-mobile: ?0' -H 'sec-ch-ua-platform: "Windows"' -H 'sec-fetch-dest: empty' -H 'sec-fetch-mode: cors' -H 'sec-fetch-site: cross-site' -H 'x-disco-client: WEB:UNKNOWN:dplus_us:2.46.0' -H 'x-disco-params: bid=dplus,hn=www.discoveryplus.com' 2>&1)
+    if [ -z "$tmpresult" ]; then
         echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         modifyJsonTemplate 'DiscoveryPlus_result' 'Unknow'
         return
     fi
 
-    local region=$(echo $result | grep -oE '"country":"[A-Z]{2}' | cut -d'"' -f4)
-    local isAllowed=$(echo $result | grep -oE '"allow":\s*true|"allow":\s*false' | cut -d':' -f2 | tr -d ' ')
+    local baseApiUrl=$(echo "$tmpresult" | grep -woP '"baseApiUrl"\s{0,}:\s{0,}"\K[^"]+')
+    local realm=$(echo "$tmpresult" | grep -woP '"realm"\s{0,}:\s{0,}"\K[^"]+')
 
-    if [[ "$isAllowed" == "true" ]]; then
-        if [[ -n "$region" ]]; then
+    if [ -z "$baseApiUrl" ] || [ -z "$realm" ]; then
+        echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}Failed (Error: PAGE ERROR)${Font_Suffix}\n"
+        modifyJsonTemplate 'DiscoveryPlus_result' 'Unknow'
+        return
+    fi
+
+    if [ "$realm" == 'dplusapac' ]; then
+        echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}No (Not Yet Available in Asia Pacific)${Font_Suffix}\n"
+        modifyJsonTemplate 'DiscoveryPlus_result' 'No' 'Not Yet Available in Asia Pacific'
+        return
+    fi
+
+    local fakeDeviceId=$(gen_uuid | md5sum | cut -f1 -d' ')
+
+    local tmpresult1=$(curl $useNIC $usePROXY $xForward -${1} ${ssll} -s "${baseApiUrl}/token?deviceId=${fakeDeviceId}&realm=${realm}&shortlived=true" -H 'accept: */*' -H 'accept-language: en-US,en;q=0.9' -H 'origin: https://www.discoveryplus.com' -H 'referer: https://www.discoveryplus.com/' -H "sec-ch-ua: ${UA_SEC_CH_UA}" -H 'sec-ch-ua-mobile: ?0' -H 'sec-ch-ua-platform: "Windows"' -H 'sec-fetch-dest: empty' -H 'sec-fetch-mode: cors' -H 'sec-fetch-site: same-site' -H "x-device-info: dplus_us/2.46.0 (desktop/desktop; Windows/NT 10.0; ${fakeDeviceId})" -H 'x-disco-client: WEB:UNKNOWN:dplus_us:2.46.0' -H "x-disco-params: realm=${realm},bid=dplus,hn=www.discoveryplus.com,hth=,features=ar" 2>&1)
+    if [ -z "$tmpresult1" ]; then
+        echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}Failed (Network Connection 1)${Font_Suffix}\n"
+        modifyJsonTemplate 'DiscoveryPlus_result' 'Unknow'
+        return
+    fi
+
+    local token=$(echo "$tmpresult1" | grep -woP '"token"\s{0,}:\s{0,}"\K[^"]+')
+    if [ -z "$token" ]; then
+        echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}Failed (Error: PAGE ERROR 1)${Font_Suffix}\n"
+        modifyJsonTemplate 'DiscoveryPlus_result' 'Unknow'
+        return
+    fi
+
+    local tmpresult2=$(curl $useNIC $usePROXY $xForward -${1} ${ssll} -s "${baseApiUrl}/cms/routes/tabbed-home?include=default&decorators=viewingHistory,isFavorite,playbackAllowed,contentAction" -H 'accept: */*' -H 'accept-language: en-US,en;q=0.9' -H 'origin: https://www.discoveryplus.com' -H 'referer: https://www.discoveryplus.com/' -H "sec-ch-ua: ${UA_SEC_CH_UA}" -H 'sec-ch-ua-mobile: ?0' -H 'sec-ch-ua-platform: "Windows"' -H 'sec-fetch-dest: empty' -H 'sec-fetch-mode: cors' -H 'sec-fetch-site: same-site' -H 'x-disco-client: WEB:UNKNOWN:dplus_us:2.46.0' -H 'x-disco-params: realm=dplay,bid=dplus,hn=www.discoveryplus.com,hth=,features=ar' -b "st=${token}" 2>&1)
+    if [ -z "$tmpresult2" ]; then
+        echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}Failed (Network Connection 2)${Font_Suffix}\n"
+        modifyJsonTemplate 'DiscoveryPlus_result' 'Unknow'
+        return
+    fi
+
+    local isBlocked=$(echo "$tmpresult2" | grep -iE 'is unavailable in your|not yet available')
+    local isOK=$(echo "$tmpresult2" | grep -i 'relationships')
+    local region=$(echo "$tmpresult2" | grep -woP '"mainTerritoryCode"\s{0,}:\s{0,}"\K[^"]+' | tr a-z A-Z)
+
+    if [ -z "$isBlocked" ] && [ -z "$isOK" ]; then
+        echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}Failed (Error: PAGE ERROR 2)${Font_Suffix}\n"
+        modifyJsonTemplate 'DiscoveryPlus_result' 'Unknow'
+        return
+    fi
+
+    if [ -n "$isBlocked" ]; then
+        echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
+        modifyJsonTemplate 'DiscoveryPlus_result' 'No'
+        return
+    fi
+
+    if [ -n "$isOK" ]; then
+        if [ -n "$region" ]; then
             echo -n -e "\r Discovery+:\t\t\t\t${Font_Green}Yes (Region: ${region})${Font_Suffix}\n"
             modifyJsonTemplate 'DiscoveryPlus_result' 'Yes' "${region}"
         else
@@ -449,16 +530,10 @@ MediaUnlockTest_DiscoveryPlus() {
             modifyJsonTemplate 'DiscoveryPlus_result' 'Yes'
         fi
         return
-    else
-        if [[ -n "$region" ]]; then
-            echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}No (Region: ${region})${Font_Suffix}\n"
-            modifyJsonTemplate 'DiscoveryPlus_result' 'No' "${region}"
-        else
-            echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
-            modifyJsonTemplate 'DiscoveryPlus_result' 'No'
-        fi
-        return
     fi
+
+    echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}Failed (Error: Unknown)${Font_Suffix}\n"
+    modifyJsonTemplate 'DiscoveryPlus_result' 'Unknow'
 }
 
 MediaUnlockTest_ParamountPlus() {
@@ -594,63 +669,29 @@ modifyJsonTemplate() {
     fi
 }
 
-main() {
-    echo
-    checkOS
-    checkCPU
-    checkDependencies
-    checkConfig
-    runCheck
-    checkData
-    setCronTask
-    postData
-    printInfo
-}
-
 setCronTask() {
-    while true; do
-        echo -e "$(green) 是否设置定时检测任务?"
-        echo "[1] 1小时"
-        echo "[2] 2小时"
-        echo "[3] 3小时"
-        echo "[4] 4小时"
-        echo "[5] 6小时"
-        echo "[6] 8小时"
-        echo "[7] 12小时"
-        echo "[8] 24小时"
+    addTask() {
+        execution_time_interval=$1
+
+        crontab -l >/root/crontab.list
+        echo "0 */${execution_time_interval} * * * CRONRUN=1 /bin/bash /root/csm.sh" >>/root/crontab.list
+        crontab /root/crontab.list
+        rm -rf /root/crontab.list
+        echo -e "$(green) The scheduled task is added successfully."
+    }
+
+    crontab -l | grep "csm.sh" >/dev/null
+    if [[ "$?" != "0" ]]; then
+        echo "[1] 1 hour"
+        echo "[2] 2 hour"
+        echo "[3] 3 hour"
+        echo "[4] 4 hour"
+        echo "[5] 6 hour"
+        echo "[6] 8 hour"
+        echo "[7] 12 hour"
+        echo "[8] 24 hour"
         echo
-        read -p "$(blue) 请选择检测频率并输入序号 (例如: 1):" time_interval_id
-
-        # 检查是否为空输入
-        if [[ -z "${time_interval_id}" ]]; then
-            echo -e "$(red) 输入不能��空，请输入1-8之间的数字"
-            continue
-        fi
-
-        if ! [[ "${time_interval_id}" =~ ^[1-8]$ ]]; then
-            echo -e "$(red) 输入错误，请输入1-8之间的数字"
-            continue
-        fi
-
-        # 检查是否已经存在定时任务
-        existing_task=$(crontab -l 2>/dev/null | grep "csm.sh" || true)
-        
-        # 如果已存在定时任务，询问是否覆盖
-        if [[ -n "${existing_task}" ]]; then
-            echo -e "$(yellow) 检测到已存在定时任务，是否覆盖?"
-            read -p "$(blue) 请输入 y 确认覆盖，输入其他则跳过:" confirm
-            if [[ "${confirm}" != "y" ]]; then
-                echo -e "$(green) 保留现有定时任务，跳过设置"
-                return
-            fi
-        fi
-
-        # 下载脚本文件
-        if [[ ! -f "/root/csm.sh" ]]; then
-            echo -e "$(green) 正在下载脚本到 /root/csm.sh 用于定时任务..."
-            curl -Ls https://raw.githubusercontent.com/q42602736/check-stream-media/main/csm.sh -o /root/csm.sh
-            chmod +x /root/csm.sh
-        fi
+        read -p "$(blue) Please select the detection frequency and enter the serial number (eg: 1):" time_interval_id
 
         if [[ "${time_interval_id}" == "5" ]];then
             time_interval=6
@@ -664,41 +705,30 @@ setCronTask() {
             time_interval=$time_interval_id
         fi
 
-        # 创建新的crontab文件
-        touch /root/crontab.list
-        
-        # 如果存在现有的crontab，则保存到文件中
-        crontab -l >/root/crontab.list 2>/dev/null || true
-        
-        # 添加完整路径和日志输出
-        echo "0 */${time_interval} * * * export CRONRUN=1; /bin/bash /root/csm.sh > /root/csm.log 2>&1" >>/root/crontab.list
-        
-        # 安装新的crontab
-        crontab /root/crontab.list
-        
-        # 清理临时文件
-        rm -f /root/crontab.list
-        
-        echo -e "$(green) 定时任务添加成功"
-        echo -e "$(green) 您可以在 /root/csm.log 查看日志"
-        break
-    done
+        case "${time_interval_id}" in
+            [1-8])
+                addTask ${time_interval};;
+            *)
+                echo -e "$(red) Choose one from the list given and enter the sequence number."
+                exit;;
+        esac
+    fi
 }
 
 checkConfig() {
     getConfig() {
-        read -p "$(blue) 请输入面板地址 (例如: https://demo.sspanel.org):" panel_address
-        read -p "$(blue) 请输入mu key:" mu_key
-        read -p "$(blue) 请输入节点ID:" node_id
+        read -p "$(blue) Please enter the panel address (eg: https://demo.sspanel.org):" panel_address
+        read -p "$(blue) Please enter the mu key:" mu_key
+        read -p "$(blue) Please enter the node id:" node_id
 
         if [[ "${panel_address}" = "" ]] || [[ "${mu_key}" = "" ]];then
-            echo -e "$(red) 请完成所有必要的参数输入"
+            echo -e "$(red) Complete all necessary parameter entries."
             exit
         fi
 
         curl -s "${panel_address}/mod_mu/nodes?key=${mu_key}" | grep "invalid" > /dev/null
         if [[ "$?" = "0" ]];then
-            echo -e "$(red) 网站地址或mukey错误，请重试"
+            echo -e "$(red) Wrong website address or mukey error, please try again."
             exit
         fi
 
@@ -714,11 +744,11 @@ checkConfig() {
 
 postData() {
     if [[ ! -e "/root/.csm.config" ]];then
-        echo -e "$(red) 配置文件丢失"
+        echo -e "$(red) Missing configuration file."
         exit
     fi
     if [[ ! -e "/root/media_test_tpl.json" ]];then
-        echo -e "$(red) 检测报告丢失"
+        echo -e "$(red) Missing detection report."
         exit
     fi
 
@@ -739,11 +769,11 @@ printInfo() {
     color_end='\033[0m'
 
     echo
-    echo -e "${green_start}本脚本用于检测流媒体解锁的代码全部来自开源项目 https://github.com/lmc999/RegionRestrictionCheck，开源协议为 AGPL-3.0。按照开源许可要，本脚本同样开源。感谢原作者 @lmc999 以及为该项目提交 pull request 的所有人的贡献。${color_end}"
+    echo -e "${green_start}The code for this script to detect streaming media unlocking is all from the open source project https://github.com/lmc999/RegionRestrictionCheck , and the open source protocol is AGPL-3.0. This script is open source as required by the open source license. Thanks to the original author @lmc999 and everyone who made the pull request for this project for their contributions.${color_end}"
     echo
-    echo -e "${green_start}项目地址: https://github.com/iamsaltedfish/check-stream-media${color_end}"
-    echo -e "${green_start}版本: 2023-08-07 v.2.0.1${color_end}"
-    echo -e "${green_start}作者: @iamsaltedfish${color_end}"
+    echo -e "${green_start}Project: https://github.com/iamsaltedfish/check-stream-media${color_end}"
+    echo -e "${green_start}Version: 2023-08-07 v.2.0.1${color_end}"
+    echo -e "${green_start}Author: @iamsaltedfish${color_end}"
 }
 
 # 在文件开头添加 UUID 生成函数
@@ -751,32 +781,147 @@ gen_uuid() {
     od -x /dev/urandom | head -1 | awk '{OFS="-"; print $2$3,$4,$5,$6,$7$8$9}'
 }
 
+getDNSConfig() {
+    # 检查是否是定时任务运行
+    if [[ -n "${CRONRUN}" ]]; then
+        for service in netflix disney youtube openai discovery paramount bahamut; do
+            if [[ -f "/root/.csm.dns.${service}" ]]; then
+                dns_server=$(cat "/root/.csm.dns.${service}")
+                if [[ -n "${dns_server}" ]]; then
+                    green "定时任务使用已保存的${service}检测DNS服务器: ${dns_server}"
+                fi
+            fi
+        done
+        return
+    fi
+
+    # 询问各个服务的DNS
+    read -p "$(blue "请输入用于Netflix解锁检测的DNS服务器地址 (直接回车使用系统默认DNS): ")" netflix_dns
+    if [[ -n "${netflix_dns}" ]]; then
+        echo "${netflix_dns}" > /root/.csm.dns.netflix
+        green "Netflix DNS服务器已设置为: ${netflix_dns}"
+    else
+        green "Netflix检测将使用系统默认DNS服务器"
+        rm -f /root/.csm.dns.netflix
+    fi
+
+    read -p "$(blue "请输入用于Disney+解锁检测的DNS服务器地址 (直接回车使用系统默认DNS): ")" disney_dns
+    if [[ -n "${disney_dns}" ]]; then
+        echo "${disney_dns}" > /root/.csm.dns.disney
+        green "Disney+ DNS服务器已设置为: ${disney_dns}"
+    else
+        green "Disney+检测将使用系统默认DNS服务器"
+        rm -f /root/.csm.dns.disney
+    fi
+    
+     read -p "$(blue "请输入用于巴哈姆特动画疯解锁检测的DNS服务器地址 (直接回车使用系统默认DNS): ")" bahamut_dns
+    if [[ -n "${bahamut_dns}" ]]; then
+        echo "${bahamut_dns}" > /root/.csm.dns.bahamut
+        green "巴哈姆特动画疯 DNS服务器已设置为: ${bahamut_dns}"
+    else
+        green "巴哈姆特动画疯检测将使用系统默认DNS服务器"
+        rm -f /root/.csm.dns.bahamut
+    fi
+
+    read -p "$(blue "请输入用于YouTube Premium解锁检测的DNS服务器地址 (直接回车使用系统默认DNS): ")" youtube_dns
+    if [[ -n "${youtube_dns}" ]]; then
+        echo "${youtube_dns}" > /root/.csm.dns.youtube
+        green "YouTube Premium DNS服务器已设置为: ${youtube_dns}"
+    else
+        green "YouTube Premium检测将使用系统默认DNS服务器"
+        rm -f /root/.csm.dns.youtube
+    fi
+
+    read -p "$(blue "请输入用于OpenAI解锁检测的DNS服务器地址 (直接回车使用系统默认DNS): ")" openai_dns
+    if [[ -n "${openai_dns}" ]]; then
+        echo "${openai_dns}" > /root/.csm.dns.openai
+        green "OpenAI DNS服务器已设置为: ${openai_dns}"
+    else
+        green "OpenAI检测将使用系统默认DNS服务器"
+        rm -f /root/.csm.dns.openai
+    fi
+
+    read -p "$(blue "请输入用于Discovery+解锁检测的DNS服务器地址 (直接回车使用系统默认DNS): ")" discovery_dns
+    if [[ -n "${discovery_dns}" ]]; then
+        echo "${discovery_dns}" > /root/.csm.dns.discovery
+        green "Discovery+ DNS服务器已设置为: ${discovery_dns}"
+    else
+        green "Discovery+检测将使用系统默认DNS服务器"
+        rm -f /root/.csm.dns.discovery
+    fi
+
+    read -p "$(blue "请输入用于Paramount+解锁检测的DNS服务器地址 (直接回车使用系统默认DNS): ")" paramount_dns
+    if [[ -n "${paramount_dns}" ]]; then
+        echo "${paramount_dns}" > /root/.csm.dns.paramount
+        green "Paramount+ DNS服务器已设置为: ${paramount_dns}"
+    else
+        green "Paramount+检测将使用系统默认DNS服务器"
+        rm -f /root/.csm.dns.paramount
+    fi
+}
+
+setDNSForTest() {
+    local service=$1
+    
+    # 保存当前DNS配置
+    cp /etc/resolv.conf /etc/resolv.conf.backup
+
+    # 根据服务设置相应的DNS
+    if [[ -f "/root/.csm.dns.${service}" ]]; then
+        dns_server=$(cat "/root/.csm.dns.${service}")
+        if [[ -n "${dns_server}" ]]; then
+            echo "nameserver ${dns_server}" > /etc/resolv.conf
+        fi
+    fi
+}
+
+restoreDNS() {
+    if [[ -f "/etc/resolv.conf.backup" ]]; then
+        mv /etc/resolv.conf.backup /etc/resolv.conf
+    fi
+}
+
 runCheck() {
     createJsonTemplate
     
     # OpenAI检测
+    setDNSForTest "openai"
     OpenAiUnlockTest
+    restoreDNS
     
     # Netflix检测
+    setDNSForTest "netflix"
     MediaUnlockTest_Netflix 4
+    restoreDNS
     
     # Disney+检测
+    setDNSForTest "disney"
     MediaUnlockTest_DisneyPlus 4
+    restoreDNS
     
     # YouTube Premium检测
+    setDNSForTest "youtube"
     MediaUnlockTest_YouTube_Premium 4
+    restoreDNS
 
     # Discovery+检测
+    setDNSForTest "discovery"
     MediaUnlockTest_DiscoveryPlus 4
+    restoreDNS
 
     # Paramount+检测
+    setDNSForTest "paramount"
     MediaUnlockTest_ParamountPlus 4
+    restoreDNS
 
     # 巴哈姆特动画疯检测
+    setDNSForTest "bahamut"
     MediaUnlockTest_BahamutAnime 4
+    restoreDNS
 }
 
-checkData() {
+checkData()
+{
     counter=0
     max_check_num=3
     cat /root/media_test_tpl.json | grep "_result" > /dev/null
@@ -784,9 +929,24 @@ checkData() {
     do
         sleep 1
         runCheck > /dev/null
-        echo -e "\033[33m数据有误，正在第 ${counter} 次重新测试...${Font_Suffix}"
+        echo -e "\033[33mThere is something wrong with the data and it is being retested for the ${counter} time...\033[0m"
         counter=$(expr ${counter} + 1)
     done
+}
+
+main() {
+    echo
+    checkOS
+    checkCPU
+    checkDependencies
+    setCronTask
+    checkConfig
+    getDNSConfig
+    runCheck
+    checkData
+    postData
+    restoreDNS
+    printInfo
 }
 
 main
