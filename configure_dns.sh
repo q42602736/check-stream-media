@@ -71,3 +71,7 @@ echo "配置已保存到 /etc/XrayR/dns.json"
 # 显示最终配置内容
 echo "当前配置内容："
 cat /etc/XrayR/dns.json
+
+# 运行XrayR并选择6重启
+echo "正在重启XrayR服务..."
+echo "6" | xrayr
