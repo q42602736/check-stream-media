@@ -760,18 +760,18 @@ setCronTask() {
 
 checkConfig() {
     getConfig() {
-        read -p "$(blue) Please enter the panel address (eg: https://demo.sspanel.org):" panel_address
-        read -p "$(blue) Please enter the mu key:" mu_key
-        read -p "$(blue) Please enter the node id:" node_id
+        read -p "$(blue " 请输入面板地址 (例如: https://demo.sspanel.org):")" panel_address
+        read -p "$(blue " 请输入 mu key:")" mu_key
+        read -p "$(blue " 请输入节点 ID:")" node_id
 
         if [[ "${panel_address}" = "" ]] || [[ "${mu_key}" = "" ]];then
-            echo -e "$(red) Complete all necessary parameter entries."
+            echo -e "$(red) 请完整填写所有必需的参数。"
             exit
         fi
 
         curl -s "${panel_address}/mod_mu/nodes?key=${mu_key}" | grep "invalid" > /dev/null
         if [[ "$?" = "0" ]];then
-            echo -e "$(red) Wrong website address or mukey error, please try again."
+            echo -e "$(red) 网站地址或 mu key 错误，请重试。"
             exit
         fi
 
