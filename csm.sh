@@ -453,67 +453,16 @@ MediaUnlockTest_YouTube_Premium() {
 }
 
 MediaUnlockTest_DiscoveryPlus() {
-    if [ "${USE_IPV6}" == 1 ]; then
-        echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}IPv6 Not Support${Font_Suffix}\n"
-        modifyJsonTemplate 'DiscoveryPlus_result' 'No' 'IPv6 Not Support'
-        return
-    fi
-
-    # 取得 API 网址
-    local tmpresult=$(curl $useNIC $usePROXY $xForward -${1} ${ssll} -s 'https://global-prod.disco-api.com/bootstrapInfo' -H 'accept: */*' -H 'accept-language: en-US,en;q=0.9' -H 'origin: https://www.discoveryplus.com' -H 'referer: https://www.discoveryplus.com/' -H "sec-ch-ua: ${UA_SEC_CH_UA}" -H 'sec-ch-ua-mobile: ?0' -H 'sec-ch-ua-platform: "Windows"' -H 'sec-fetch-dest: empty' -H 'sec-fetch-mode: cors' -H 'sec-fetch-site: cross-site' -H 'x-disco-client: WEB:UNKNOWN:dplus_us:2.46.0' -H 'x-disco-params: bid=dplus,hn=www.discoveryplus.com' 2>&1)
+    local tmpresult=$(curl $useNIC $usePROXY $xForward -${1} ${ssll} -sL --max-time 10 "https://us.discoveryplus.com/")
+    
     if [ -z "$tmpresult" ]; then
         echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         modifyJsonTemplate 'DiscoveryPlus_result' 'Unknow'
         return
     fi
 
-    local baseApiUrl=$(echo "$tmpresult" | grep -woP '"baseApiUrl"\s{0,}:\s{0,}"\K[^"]+')
-    local realm=$(echo "$tmpresult" | grep -woP '"realm"\s{0,}:\s{0,}"\K[^"]+')
-
-    if [ -z "$baseApiUrl" ] || [ -z "$realm" ]; then
-        echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}Failed (Error: PAGE ERROR)${Font_Suffix}\n"
-        modifyJsonTemplate 'DiscoveryPlus_result' 'Unknow'
-        return
-    fi
-
-    if [ "$realm" == 'dplusapac' ]; then
-        echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}No (Not Yet Available in Asia Pacific)${Font_Suffix}\n"
-        modifyJsonTemplate 'DiscoveryPlus_result' 'No' 'Not Yet Available in Asia Pacific'
-        return
-    fi
-
-    local fakeDeviceId=$(gen_uuid | md5sum | cut -f1 -d' ')
-
-    local tmpresult1=$(curl $useNIC $usePROXY $xForward -${1} ${ssll} -s "${baseApiUrl}/token?deviceId=${fakeDeviceId}&realm=${realm}&shortlived=true" -H 'accept: */*' -H 'accept-language: en-US,en;q=0.9' -H 'origin: https://www.discoveryplus.com' -H 'referer: https://www.discoveryplus.com/' -H "sec-ch-ua: ${UA_SEC_CH_UA}" -H 'sec-ch-ua-mobile: ?0' -H 'sec-ch-ua-platform: "Windows"' -H 'sec-fetch-dest: empty' -H 'sec-fetch-mode: cors' -H 'sec-fetch-site: same-site' -H "x-device-info: dplus_us/2.46.0 (desktop/desktop; Windows/NT 10.0; ${fakeDeviceId})" -H 'x-disco-client: WEB:UNKNOWN:dplus_us:2.46.0' -H "x-disco-params: realm=${realm},bid=dplus,hn=www.discoveryplus.com,hth=,features=ar" 2>&1)
-    if [ -z "$tmpresult1" ]; then
-        echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}Failed (Network Connection 1)${Font_Suffix}\n"
-        modifyJsonTemplate 'DiscoveryPlus_result' 'Unknow'
-        return
-    fi
-
-    local token=$(echo "$tmpresult1" | grep -woP '"token"\s{0,}:\s{0,}"\K[^"]+')
-    if [ -z "$token" ]; then
-        echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}Failed (Error: PAGE ERROR 1)${Font_Suffix}\n"
-        modifyJsonTemplate 'DiscoveryPlus_result' 'Unknow'
-        return
-    fi
-
-    local tmpresult2=$(curl $useNIC $usePROXY $xForward -${1} ${ssll} -s "${baseApiUrl}/cms/routes/tabbed-home?include=default&decorators=viewingHistory,isFavorite,playbackAllowed,contentAction" -H 'accept: */*' -H 'accept-language: en-US,en;q=0.9' -H 'origin: https://www.discoveryplus.com' -H 'referer: https://www.discoveryplus.com/' -H "sec-ch-ua: ${UA_SEC_CH_UA}" -H 'sec-ch-ua-mobile: ?0' -H 'sec-ch-ua-platform: "Windows"' -H 'sec-fetch-dest: empty' -H 'sec-fetch-mode: cors' -H 'sec-fetch-site: same-site' -H 'x-disco-client: WEB:UNKNOWN:dplus_us:2.46.0' -H 'x-disco-params: realm=dplay,bid=dplus,hn=www.discoveryplus.com,hth=,features=ar' -b "st=${token}" 2>&1)
-    if [ -z "$tmpresult2" ]; then
-        echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}Failed (Network Connection 2)${Font_Suffix}\n"
-        modifyJsonTemplate 'DiscoveryPlus_result' 'Unknow'
-        return
-    fi
-
-    local isBlocked=$(echo "$tmpresult2" | grep -iE 'is unavailable in your|not yet available')
-    local isOK=$(echo "$tmpresult2" | grep -i 'relationships')
-    local region=$(echo "$tmpresult2" | grep -woP '"mainTerritoryCode"\s{0,}:\s{0,}"\K[^"]+' | tr a-z A-Z)
-
-    if [ -z "$isBlocked" ] && [ -z "$isOK" ]; then
-        echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}Failed (Error: PAGE ERROR 2)${Font_Suffix}\n"
-        modifyJsonTemplate 'DiscoveryPlus_result' 'Unknow'
-        return
-    fi
+    local isBlocked=$(echo "$tmpresult" | grep -i 'unavailable-in-your-region\|not-available-in-your-region\|geo-restriction')
+    local region=$(echo "$tmpresult" | grep -oE '"region":"[A-Z]{2}"' | cut -d'"' -f4)
 
     if [ -n "$isBlocked" ]; then
         echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
@@ -521,18 +470,20 @@ MediaUnlockTest_DiscoveryPlus() {
         return
     fi
 
-    if [ -n "$isOK" ]; then
-        if [ -n "$region" ]; then
-            echo -n -e "\r Discovery+:\t\t\t\t${Font_Green}Yes (Region: ${region})${Font_Suffix}\n"
-            modifyJsonTemplate 'DiscoveryPlus_result' 'Yes' "${region}"
-        else
-            echo -n -e "\r Discovery+:\t\t\t\t${Font_Green}Yes${Font_Suffix}\n"
-            modifyJsonTemplate 'DiscoveryPlus_result' 'Yes'
-        fi
+    if [ -n "$region" ]; then
+        echo -n -e "\r Discovery+:\t\t\t\t${Font_Green}Yes (Region: ${region})${Font_Suffix}\n"
+        modifyJsonTemplate 'DiscoveryPlus_result' 'Yes' "${region}"
         return
     fi
 
-    echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}Failed (Error: Unknown)${Font_Suffix}\n"
+    # 如果没有明确的地区信息但也没有被阻止，可能是可以访问的
+    if echo "$tmpresult" | grep -q 'discovery+'; then
+        echo -n -e "\r Discovery+:\t\t\t\t${Font_Green}Yes${Font_Suffix}\n"
+        modifyJsonTemplate 'DiscoveryPlus_result' 'Yes'
+        return
+    fi
+
+    echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}Failed (Unknown)${Font_Suffix}\n"
     modifyJsonTemplate 'DiscoveryPlus_result' 'Unknow'
 }
 
@@ -724,7 +675,7 @@ setCronTask() {
 
         # 下载脚本文件
         if [[ ! -f "/root/csm.sh" ]]; then
-            echo -e "$(green) 正在��载脚本到 /root/csm.sh 用于定时任务..."
+            echo -e "$(green) 正在下载脚本到 /root/csm.sh 用于定时任务..."
             curl -Ls https://raw.githubusercontent.com/q42602736/check-stream-media/main/csm.sh -o /root/csm.sh
             chmod +x /root/csm.sh
         fi
@@ -883,7 +834,7 @@ getDNSConfig() {
     read -p "$(blue "请输入用于Discovery+解锁检测的DNS服务器地址 (直接回车使用系统默认DNS): ")" discovery_dns
     if [[ -n "${discovery_dns}" ]]; then
         echo "${discovery_dns}" > /root/.csm.dns.discovery
-        echo -e "$(green) Discovery+ DNS服务器已设置为: ${discovery_dns}"
+        echo -e "$(green) Discovery+ DNS服务器���设置为: ${discovery_dns}"
     else
         echo -e "$(green) Discovery+检测将使用系统默认DNS服务器"
         rm -f /root/.csm.dns.discovery
