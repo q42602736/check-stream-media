@@ -80,6 +80,9 @@ configure_dns() {
     echo -e "\n6. CBS DNS设置"
     read -p "请输入CBS解锁DNS地址 [回车使用默认DNS]: " cbs_dns
     
+    echo -e "\n7. YouTube 视频解锁 DNS设置"
+    read -p "请输入YouTube解锁DNS地址 [回车使用默认DNS]: " youtube_dns
+    
     # 备份原配置
     cp /etc/dnsmasq.conf /etc/dnsmasq.conf.bak
     
@@ -317,6 +320,35 @@ address=/cbsservice.aws.syncbak.com/${cbs_dns}
 address=/link.theplatform.com/${cbs_dns}
 EOF
     fi
+
+    # YouTube配置
+    if [[ ! -z "$youtube_dns" ]]; then
+        cat >> /etc/dnsmasq.conf <<EOF
+# YouTube 视频解锁
+server=/youtube.com/${youtube_dns}
+server=/ytimg.com/${youtube_dns}
+server=/ytimg.l.google.com/${youtube_dns}
+server=/yt3.ggpht.com/${youtube_dns}
+server=/googlevideo.com/${youtube_dns}
+server=/youtu.be/${youtube_dns}
+server=/yt.be/${youtube_dns}
+server=/youtube-nocookie.com/${youtube_dns}
+server=/youtube-ui.l.google.com/${youtube_dns}
+server=/youtubei.googleapis.com/${youtube_dns}
+server=/youtube.googleapis.com/${youtube_dns}
+server=/youtube-nocookie.com/${youtube_dns}
+server=/youtube.com.google.com/${youtube_dns}
+server=/youtube.l.google.com/${youtube_dns}
+server=/youtube-ui.l.google.com/${youtube_dns}
+server=/youtube.sandbox.google.com/${youtube_dns}
+server=/youtube.landing.google.com/${youtube_dns}
+server=/youtube.google.com/${youtube_dns}
+server=/youtubeeducation.com/${youtube_dns}
+server=/youtubekids.com/${youtube_dns}
+server=/yt3.ggpht.com/${youtube_dns}
+server=/ytimg.l.google.com/${youtube_dns}
+EOF
+    fi
     
     systemctl restart dnsmasq
     echo -e "${GREEN}DNS配置已更新！${PLAIN}"
@@ -327,6 +359,7 @@ EOF
     [[ ! -z "$openai_dns" ]] && echo -e "OpenAI DNS: ${YELLOW}${openai_dns}${PLAIN}"
     [[ ! -z "$discovery_dns" ]] && echo -e "Discovery+ DNS: ${YELLOW}${discovery_dns}${PLAIN}"
     [[ ! -z "$cbs_dns" ]] && echo -e "CBS DNS: ${YELLOW}${cbs_dns}${PLAIN}"
+    [[ ! -z "$youtube_dns" ]] && echo -e "YouTube 视频解锁 DNS: ${YELLOW}${youtube_dns}${PLAIN}"
 }
 
 # 配置resolv.conf
@@ -422,7 +455,7 @@ show_menu() {
   ${GREEN}1.${PLAIN} 安装 Dnsmasq
   ${GREEN}2.${PLAIN} 卸载 Dnsmasq
   ${GREEN}3.${PLAIN} 查看状态
-  ${GREEN}4.${PLAIN} 重��服务
+  ${GREEN}4.${PLAIN} 重启服务
   ${GREEN}5.${PLAIN} 配置DNS服务器
   ${GREEN}0.${PLAIN} 退出脚本
   ----------------"
