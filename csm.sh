@@ -19,7 +19,7 @@ green() {
 }
 
 red() {
-    echo -e "\033[31m$1\033[0m"
+    echo -e "\034[31m$1\033[0m"
 }
 
 yellow() {
@@ -453,31 +453,47 @@ MediaUnlockTest_YouTube_Premium() {
 }
 
 MediaUnlockTest_DiscoveryPlus() {
-    local tmpresult=$(curl $useNIC $usePROXY $xForward -${1} ${ssll} -sL --max-time 10 "https://us.discoveryplus.com/")
+    # 等待DNS生效
+    sleep 3
     
-    if [ -z "$tmpresult" ]; then
+    # 先尝试解析域名
+    local dns_result=$(dig +short discoveryplus.com)
+    if [ -z "$dns_result" ]; then
+        echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}Failed (DNS Resolution)${Font_Suffix}\n"
+        modifyJsonTemplate 'DiscoveryPlus_result' 'Unknow'
+        return
+    }
+
+    # 使用多个检测点
+    local tmpresult1=$(curl $useNIC $usePROXY $xForward -${1} ${ssll} -sL --max-time 10 "https://us.discoveryplus.com/")
+    local tmpresult2=$(curl $useNIC $usePROXY $xForward -${1} ${ssll} -sL --max-time 10 "https://www.discoveryplus.com/")
+    
+    if [ -z "$tmpresult1" ] && [ -z "$tmpresult2" ]; then
         echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         modifyJsonTemplate 'DiscoveryPlus_result' 'Unknow'
         return
     fi
 
-    local isBlocked=$(echo "$tmpresult" | grep -i 'unavailable-in-your-region\|not-available-in-your-region\|geo-restriction')
-    local region=$(echo "$tmpresult" | grep -oE '"region":"[A-Z]{2}"' | cut -d'"' -f4)
-
+    local tmpresult="$tmpresult1$tmpresult2"
+    
+    # 检查是否被阻止
+    local isBlocked=$(echo "$tmpresult" | grep -i 'unavailable-in-your-region\|not-available-in-your-region\|geo-restriction\|page-not-available\|region-blocked')
     if [ -n "$isBlocked" ]; then
         echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
         modifyJsonTemplate 'DiscoveryPlus_result' 'No'
         return
     fi
 
+    # 检查区域信息
+    local region=$(echo "$tmpresult" | grep -oE '"region":\s*"[A-Z]{2}"' | cut -d'"' -f4)
     if [ -n "$region" ]; then
         echo -n -e "\r Discovery+:\t\t\t\t${Font_Green}Yes (Region: ${region})${Font_Suffix}\n"
         modifyJsonTemplate 'DiscoveryPlus_result' 'Yes' "${region}"
         return
     fi
 
-    # 如果没有明确的地区信息但也没有被阻止，可能是可以访问的
-    if echo "$tmpresult" | grep -q 'discovery+'; then
+    # 检查是否有 Discovery+ 特征内容
+    if echo "$tmpresult" | grep -qi 'discovery+\|discoveryplus\|dplus'; then
         echo -n -e "\r Discovery+:\t\t\t\t${Font_Green}Yes${Font_Suffix}\n"
         modifyJsonTemplate 'DiscoveryPlus_result' 'Yes'
         return
@@ -834,7 +850,7 @@ getDNSConfig() {
     read -p "$(blue "请输入用于Discovery+解锁检测的DNS服务器地址 (直接回车使用系统默认DNS): ")" discovery_dns
     if [[ -n "${discovery_dns}" ]]; then
         echo "${discovery_dns}" > /root/.csm.dns.discovery
-        echo -e "$(green) Discovery+ DNS服务器���设置为: ${discovery_dns}"
+        echo -e "$(green) Discovery+ DNS服务器已设置为: ${discovery_dns}"
     else
         echo -e "$(green) Discovery+检测将使用系统默认DNS服务器"
         rm -f /root/.csm.dns.discovery
