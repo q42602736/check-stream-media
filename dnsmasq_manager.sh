@@ -6,6 +6,40 @@ GREEN="\033[32m"
 YELLOW="\033[33m"
 PLAIN="\033[0m"
 
+# 在颜色定义后添加以下内容
+SCRIPT_NAME="dnsmasq_manager.sh"
+SCRIPT_URL="https://raw.githubusercontent.com/q42602736/check-stream-media/main/dnsmasq_manager.sh"
+
+# 检查是否为curl方式运行
+is_curl_running() {
+    if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+        return 0 # 直接运行的脚本
+    else
+        return 1 # 通过curl运行
+    fi
+}
+
+# 下载或更新脚本
+download_script() {
+    echo -e "${GREEN}开始下载脚本...${PLAIN}"
+    curl -Ls "${SCRIPT_URL}" -o "/usr/local/bin/${SCRIPT_NAME}"
+    chmod +x "/usr/local/bin/${SCRIPT_NAME}"
+    echo -e "${GREEN}脚本已下载到 /usr/local/bin/${SCRIPT_NAME}${PLAIN}"
+}
+
+# 在文件开头（颜色定义之后）添加脚本检查和下载逻辑
+if ! is_curl_running; then
+    if [[ -f "/usr/local/bin/${SCRIPT_NAME}" ]]; then
+        echo -e "${GREEN}发现脚本已下载，使用本地版本运行...${PLAIN}"
+        exec "/usr/local/bin/${SCRIPT_NAME}"
+        exit 0
+    else
+        download_script
+        exec "/usr/local/bin/${SCRIPT_NAME}"
+        exit 0
+    fi
+fi
+
 # 检查是否为root用户
 [[ $EUID -ne 0 ]] && echo -e "${RED}错误：${PLAIN} 必须使用root用户运行此脚本！\n" && exit 1
 
