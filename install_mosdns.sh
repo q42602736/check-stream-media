@@ -96,6 +96,8 @@ plugins:
     args:
       upstream:
         - addr: ${default_dns}
+        - addr: 1.1.1.1
+        - addr: 8.8.8.8
 
   # 香港解锁 DNS
   - tag: forward_hk
@@ -202,59 +204,106 @@ EOF
     (crontab -l 2>/dev/null; echo "0 0 * * 0 /usr/local/bin/update-mosdns.sh") | crontab -
 }
 
+# 卸载 MosDNS
+uninstall_mosdns() {
+    echo -e "${GREEN}正在卸载 MosDNS...${PLAIN}"
+    
+    # 停止并禁用服务
+    systemctl stop mosdns
+    systemctl disable mosdns
+    
+    # 删除文件
+    rm -rf /etc/mosdns
+    rm -f /usr/local/bin/mosdns
+    rm -f /usr/local/bin/update-mosdns.sh
+    rm -f /etc/systemd/system/mosdns.service
+    
+    # 恢复 DNS 配置
+    if [ -f /etc/resolv.conf.backup ]; then
+        chattr -i /etc/resolv.conf
+        cp /etc/resolv.conf.backup /etc/resolv.conf
+        rm -f /etc/resolv.conf.backup
+        echo -e "${GREEN}已恢复原始 DNS 配置${PLAIN}"
+    fi
+    
+    # 删除定时任务
+    crontab -l | grep -v "update-mosdns.sh" | crontab -
+    
+    systemctl daemon-reload
+    
+    echo -e "${GREEN}MosDNS 已完全卸载${PLAIN}"
+}
+
 # 主函数
 main() {
     clear
-    echo -e "${GREEN}MosDNS 安装脚本${PLAIN}"
+    echo -e "${GREEN}MosDNS 管理脚本${PLAIN}"
     echo -e "${GREEN}支持：${PLAIN}"
     echo -e "${GREEN}香港节点解锁：Netflix、Disney+、巴哈姆特${PLAIN}"
     echo -e "${GREEN}洛杉矶节点解锁：OpenAI、Discovery+、CBS${PLAIN}"
     echo "------------------------"
+    echo -e "1. 安装 MosDNS"
+    echo -e "2. 卸载 MosDNS"
+    echo "------------------------"
     
-    check_root
-    check_arch
-
-    # 获取系统当前 DNS
-    local current_dns=$(get_system_dns)
+    read -p "请输入选项 [1-2]: " option
     
-    # 获取用户输入的 DNS 服务器地址
-    while true; do
-        read -p "请输入香港解锁 DNS 服务器地址: " hk_dns
-        if [[ -n "$hk_dns" ]]; then
-            break
-        else
-            echo -e "${RED}错误：DNS 地址不能为空${PLAIN}"
-        fi
-    done
-
-    while true; do
-        read -p "请输入洛杉矶解锁 DNS 服务器地址: " la_dns
-        if [[ -n "$la_dns" ]]; then
-            break
-        else
-            echo -e "${RED}错误：DNS 地址不能为空${PLAIN}"
-        fi
-    done
-
-    read -p "请输入默认 DNS 服务器地址 [默认: ${current_dns}]: " default_dns
-    default_dns=${default_dns:-${current_dns}}
-    
-    install_dependencies
-    install_mosdns
-    configure_mosdns "$hk_dns" "$la_dns" "$default_dns"
-    create_service
-    configure_system_dns
-    create_update_script
-    
-    echo -e "${GREEN}MosDNS 安装完成！${PLAIN}"
-    echo -e "${GREEN}系统 DNS 已设置为使用 MosDNS${PLAIN}"
-    echo -e "${GREEN}原系统 DNS 配置已备份到 /etc/resolv.conf.backup${PLAIN}"
-    echo -e "${GREEN}当前使用的 DNS 服务器：${PLAIN}"
-    echo -e "${GREEN}香港解锁 DNS：${hk_dns}${PLAIN}"
-    echo -e "${GREEN}洛杉矶解锁 DNS：${la_dns}${PLAIN}"
-    echo -e "${GREEN}默认 DNS：${default_dns}${PLAIN}"
-    echo -e "${YELLOW}提示：如需恢复原始 DNS 配置，请执行：${PLAIN}"
-    echo -e "${YELLOW}chattr -i /etc/resolv.conf && cp /etc/resolv.conf.backup /etc/resolv.conf${PLAIN}"
+    case "${option}" in
+        1)
+            check_root
+            check_arch
+            
+            # 获取系统当前 DNS
+            local current_dns=$(get_system_dns)
+            
+            # 获取用户输入的 DNS 服务器地址
+            while true; do
+                read -p "请输入香港解锁 DNS 服务器地址: " hk_dns
+                if [[ -n "$hk_dns" ]]; then
+                    break
+                else
+                    echo -e "${RED}错误：DNS 地址不能为空${PLAIN}"
+                fi
+            done
+            
+            while true; do
+                read -p "请输入洛杉矶解锁 DNS 服务器地址: " la_dns
+                if [[ -n "$la_dns" ]]; then
+                    break
+                else
+                    echo -e "${RED}错误：DNS 地址不能为空${PLAIN}"
+                fi
+            done
+            
+            read -p "请输入默认 DNS 服务器地址 [默认: ${current_dns}]: " default_dns
+            default_dns=${default_dns:-${current_dns}}
+            
+            install_dependencies
+            install_mosdns
+            configure_mosdns "$hk_dns" "$la_dns" "$default_dns"
+            create_service
+            configure_system_dns
+            create_update_script
+            
+            echo -e "${GREEN}MosDNS 安装完成！${PLAIN}"
+            echo -e "${GREEN}系统 DNS 已设置为使用 MosDNS${PLAIN}"
+            echo -e "${GREEN}原系统 DNS 配置已备份到 /etc/resolv.conf.backup${PLAIN}"
+            echo -e "${GREEN}当前使用的 DNS 服务器：${PLAIN}"
+            echo -e "${GREEN}香港解锁 DNS：${hk_dns}${PLAIN}"
+            echo -e "${GREEN}洛杉矶解锁 DNS：${la_dns}${PLAIN}"
+            echo -e "${GREEN}默认 DNS：${default_dns}, 1.1.1.1, 8.8.8.8${PLAIN}"
+            echo -e "${YELLOW}提示：如需恢复原始 DNS 配置，请执行：${PLAIN}"
+            echo -e "${YELLOW}chattr -i /etc/resolv.conf && cp /etc/resolv.conf.backup /etc/resolv.conf${PLAIN}"
+            ;;
+        2)
+            check_root
+            uninstall_mosdns
+            ;;
+        *)
+            echo -e "${RED}错误：无效的选项${PLAIN}"
+            exit 1
+            ;;
+    esac
 }
 
 main
