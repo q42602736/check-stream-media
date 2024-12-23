@@ -781,6 +781,35 @@ gen_uuid() {
     od -x /dev/urandom | head -1 | awk '{OFS="-"; print $2$3,$4,$5,$6,$7$8$9}'
 }
 
+MediaUnlockTest_DisneyPlus_Web() {
+    local result=$(curl $useNIC $usePROXY $xForward -${1} -I --max-time 10 "https://www.disneyplus.com" 2>&1)
+    
+    if [[ "$result" == "curl"* ]]; then
+        echo -n -e "\r Disney+ (Web):\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
+        modifyJsonTemplate 'DisneyPlus_result' 'Unknow'
+        return
+    fi
+    
+    local status_code=$(echo "$result" | grep -E "^HTTP.*" | awk '{print $2}')
+    # 提取区域代码，支持任何两字母的国家/地区代码
+    local region=$(echo "$result" | grep -i "x-dss-country" | sed -n 's/.*x-dss-country=\([A-Z][A-Z]\).*/\1/Ip')
+    
+    if [[ "$status_code" == "200" ]]; then
+        if [[ -n "$region" ]]; then
+            echo -n -e "\r Disney+ (Web):\t\t\t\t${Font_Green}Yes (Region: ${region})${Font_Suffix}\n"
+            modifyJsonTemplate 'DisneyPlus_result' 'Yes' "${region}"
+        else
+            echo -n -e "\r Disney+ (Web):\t\t\t\t${Font_Green}Yes${Font_Suffix}\n"
+            modifyJsonTemplate 'DisneyPlus_result' 'Yes'
+        fi
+        return
+    else
+        echo -n -e "\r Disney+ (Web):\t\t\t\t${Font_Red}No${Font_Suffix}\n"
+        modifyJsonTemplate 'DisneyPlus_result' 'No'
+        return
+    fi
+}
+
 getDNSConfig() {
     # 检查是否是定时任务运行
     if [[ -n "${CRONRUN}" ]]; then
@@ -801,6 +830,15 @@ getDNSConfig() {
     echo -e "2. 域名 (例如: dns.google)"
     echo -e "3. 直接回车使用系统默认DNS"
     echo
+
+    read -p "$(blue "请选择Disney+检测方式 [1]API检测 [2]网页检测 (默认为1): ")" disney_check_method
+    if [[ "${disney_check_method}" == "2" ]]; then
+        export DISNEY_WEB_CHECK=1
+        green "已选择使用网页方式检测Disney+"
+    else
+        unset DISNEY_WEB_CHECK
+        green "已选择使用API方式检测Disney+"
+    fi
 
     read -p "$(blue "请输入用于Netflix解锁检测的DNS服务器: ")" netflix_dns
     if [[ -n "${netflix_dns}" ]]; then
@@ -869,7 +907,7 @@ getDNSConfig() {
 setDNSForTest() {
     local service=$1
     
-    # 保��当前DNS配置
+    # 保存当前DNS配置
     cp /etc/resolv.conf /etc/resolv.conf.backup
 
     # 根据服务设置相应的DNS
@@ -914,7 +952,11 @@ runCheck() {
     
     # Disney+检测
     setDNSForTest "disney"
-    MediaUnlockTest_DisneyPlus 4
+    if [[ -n "${DISNEY_WEB_CHECK}" ]]; then
+        MediaUnlockTest_DisneyPlus_Web 4
+    else
+        MediaUnlockTest_DisneyPlus 4
+    fi
     restoreDNS
     
     # YouTube Premium检测
