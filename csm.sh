@@ -520,8 +520,8 @@ MediaUnlockTest_DiscoveryPlus() {
     fi
 
     if [ "$realm" == 'dplusapac' ]; then
-        echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}No (Not Yet Available in Asia Pacific)${Font_Suffix}\n"
-        modifyJsonTemplate 'DiscoveryPlus_result' 'No' 'Not Yet Available in Asia Pacific'
+        echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
+        modifyJsonTemplate 'DiscoveryPlus_result' 'No'
         return
     fi
 
@@ -1033,6 +1033,13 @@ checkData()
 
 main() {
     echo
+    # 如果脚本不在root目录，则复制到root目录
+    if [[ "$0" != "/root/csm.sh" ]]; then
+        cp "$0" /root/csm.sh
+        chmod +x /root/csm.sh
+        echo -e "${Font_Green}脚本已复制到 /root/csm.sh${Font_Suffix}"
+    fi
+    
     checkOS
     checkCPU
     checkDependencies
