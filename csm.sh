@@ -796,7 +796,13 @@ getDNSConfig() {
     fi
 
     # 询问各个服务的DNS
-    read -p "$(blue "请输入用于Netflix解锁检测的DNS服务器地址 (直接回车使用系统默认DNS): ")" netflix_dns
+    echo -e "请输入DNS服务器地址,支持以下格式:"
+    echo -e "1. IP地址 (例如: 8.8.8.8)"
+    echo -e "2. 域名 (例如: dns.google)"
+    echo -e "3. 直接回车使用系统默认DNS"
+    echo
+
+    read -p "$(blue "请输入用于Netflix解锁检测的DNS服务器: ")" netflix_dns
     if [[ -n "${netflix_dns}" ]]; then
         echo "${netflix_dns}" > /root/.csm.dns.netflix
         green "Netflix DNS服务器已设置为: ${netflix_dns}"
@@ -805,7 +811,7 @@ getDNSConfig() {
         rm -f /root/.csm.dns.netflix
     fi
 
-    read -p "$(blue "请输入用于Disney+解锁检测的DNS服务器地址 (直接回车使用系统默认DNS): ")" disney_dns
+    read -p "$(blue "请输入用于Disney+解锁检测的DNS服务器: ")" disney_dns
     if [[ -n "${disney_dns}" ]]; then
         echo "${disney_dns}" > /root/.csm.dns.disney
         green "Disney+ DNS服务器已设置为: ${disney_dns}"
@@ -813,8 +819,8 @@ getDNSConfig() {
         green "Disney+检测将使用系统默认DNS服务器"
         rm -f /root/.csm.dns.disney
     fi
-    
-     read -p "$(blue "请输入用于巴哈姆特动画疯解锁检测的DNS服务器地址 (直接回车使用系统默认DNS): ")" bahamut_dns
+
+    read -p "$(blue "请输入用于巴哈姆特动画疯解锁检测的DNS服务器: ")" bahamut_dns
     if [[ -n "${bahamut_dns}" ]]; then
         echo "${bahamut_dns}" > /root/.csm.dns.bahamut
         green "巴哈姆特动画疯 DNS服务器已设置为: ${bahamut_dns}"
@@ -823,7 +829,7 @@ getDNSConfig() {
         rm -f /root/.csm.dns.bahamut
     fi
 
-    read -p "$(blue "请输入用于YouTube Premium解锁检测的DNS服务器地址 (直接回车使用系统默认DNS): ")" youtube_dns
+    read -p "$(blue "请输入用于YouTube Premium解锁检测的DNS服务器: ")" youtube_dns
     if [[ -n "${youtube_dns}" ]]; then
         echo "${youtube_dns}" > /root/.csm.dns.youtube
         green "YouTube Premium DNS服务器已设置为: ${youtube_dns}"
@@ -832,7 +838,7 @@ getDNSConfig() {
         rm -f /root/.csm.dns.youtube
     fi
 
-    read -p "$(blue "请输入用于OpenAI解锁检测的DNS服务器地址 (直接回车使用系统默认DNS): ")" openai_dns
+    read -p "$(blue "请输入用于OpenAI解锁检测的DNS服务器: ")" openai_dns
     if [[ -n "${openai_dns}" ]]; then
         echo "${openai_dns}" > /root/.csm.dns.openai
         green "OpenAI DNS服务器已设置为: ${openai_dns}"
@@ -841,7 +847,7 @@ getDNSConfig() {
         rm -f /root/.csm.dns.openai
     fi
 
-    read -p "$(blue "请输入用于Discovery+解锁检测的DNS服务器地址 (直接回车使用系统默认DNS): ")" discovery_dns
+    read -p "$(blue "请输入用于Discovery+解锁检测的DNS服务器: ")" discovery_dns
     if [[ -n "${discovery_dns}" ]]; then
         echo "${discovery_dns}" > /root/.csm.dns.discovery
         green "Discovery+ DNS服务器已设置为: ${discovery_dns}"
@@ -850,7 +856,7 @@ getDNSConfig() {
         rm -f /root/.csm.dns.discovery
     fi
 
-    read -p "$(blue "请输入用于Paramount+解锁检测的DNS服务器地址 (直接回车使用系统默认DNS): ")" paramount_dns
+    read -p "$(blue "请输入用于Paramount+解锁检测的DNS服务器: ")" paramount_dns
     if [[ -n "${paramount_dns}" ]]; then
         echo "${paramount_dns}" > /root/.csm.dns.paramount
         green "Paramount+ DNS服务器已设置为: ${paramount_dns}"
@@ -863,14 +869,26 @@ getDNSConfig() {
 setDNSForTest() {
     local service=$1
     
-    # 保存当前DNS配置
+    # 保��当前DNS配置
     cp /etc/resolv.conf /etc/resolv.conf.backup
 
     # 根据服务设置相应的DNS
     if [[ -f "/root/.csm.dns.${service}" ]]; then
         dns_server=$(cat "/root/.csm.dns.${service}")
         if [[ -n "${dns_server}" ]]; then
-            echo "nameserver ${dns_server}" > /etc/resolv.conf
+            # 检查是否是IP地址格式
+            if [[ $dns_server =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                echo "nameserver ${dns_server}" > /etc/resolv.conf
+            else
+                # 如果是域名格式,先解析获取IP
+                resolved_ip=$(dig +short ${dns_server} | head -n 1)
+                if [[ -n "${resolved_ip}" ]]; then
+                    echo "nameserver ${resolved_ip}" > /etc/resolv.conf
+                else
+                    echo "警告: 无法解析DNS服务器域名 ${dns_server}, 使用系统默认DNS"
+                    mv /etc/resolv.conf.backup /etc/resolv.conf
+                fi
+            fi
         fi
     fi
 }
