@@ -415,8 +415,15 @@ MediaUnlockTest_DisneyPlus() {
 
 }
 
-MediaUnlockTest_YouTube_Premium() {
-    local tmpresult=$(curl $useNIC $usePROXY $xForward --user-agent "${UA_Browser}" -${1} --max-time 10 -sSL -H "Accept-Language: en" -b "YSC=BiCUU3-5Gdk; CONSENT=YES+cb.20220301-11-p0.en+FX+700; GPS=1; VISITOR_INFO1_LIVE=4VwPMkB7W5A; PREF=tz=Asia.Shanghai; _gcl_au=1.1.1809531354.1646633279" "https://www.youtube.com/premium" 2>&1)
+MediaUnlockTest_YouTube_Premium_Web() {
+    # 检查DNS解析
+    local checkunlockurl="www.youtube.com"
+    local result1=`Check_DNS_1 ${checkunlockurl}`
+    local result3=`Check_DNS_3 ${checkunlockurl}`
+    local resultunlocktype=`Get_Unlock_Type ${resultP} ${result1} ${result3}`    
+
+    # 发送请求到YouTube Premium页面
+    local tmpresult=$(curl $useNIC $usePROXY $xForward -${1} --max-time 10 -sSL -H "Accept-Language: en" -b "YSC=BiCUU3-5Gdk; CONSENT=YES+cb.20220301-11-p0.en+FX+700; GPS=1; VISITOR_INFO1_LIVE=4VwPMkB7W5A; PREF=tz=Asia.Shanghai; _gcl_au=1.1.1809531354.1646633279" "https://www.youtube.com/premium" 2>&1)
 
     if [[ "$tmpresult" == "curl"* ]]; then
         echo -n -e "\r YouTube Premium:\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
@@ -424,31 +431,67 @@ MediaUnlockTest_YouTube_Premium() {
         return
     fi
 
+    # 检查是否为中国区
     local isCN=$(echo $tmpresult | grep 'www.google.cn')
     if [ -n "$isCN" ]; then
-        echo -n -e "\r YouTube Premium:\t\t\t${Font_Red}No${Font_Suffix} ${Font_Green} (Region: CN)${Font_Suffix} \n"
+        echo -n -e "\r YouTube Premium:\t${resultunlocktype}\t${Font_Red}No${Font_Suffix} ${Font_Green} (Region: CN)${Font_Suffix} \n"
         modifyJsonTemplate 'YouTube_Premium_result' 'No' 'CN'
         return
     fi
-    local isNotAvailable=$(echo $tmpresult | grep 'Premium is not available in your country')
-    local region=$(echo $tmpresult | grep "countryCode" | sed 's/.*"countryCode"//' | cut -f2 -d'"')
-    local isAvailable=$(echo $tmpresult | grep '/month')
 
+    # 检查是否不可用
+    local isNotAvailable=$(echo $tmpresult | grep 'Premium is not available in your country')
+    # 获取地区代码
+    local region=$(echo $tmpresult | grep "countryCode" | sed 's/.*"countryCode"//' | cut -f2 -d'"')
+    # 检查是否可用(通过查找"ad-free"文本)
+    local isAvailable=$(echo $tmpresult | grep 'ad-free')
+
+    # 输出结果
     if [ -n "$isNotAvailable" ]; then
         echo -n -e "\r YouTube Premium:\t\t\t${Font_Red}No${Font_Suffix} \n"
         modifyJsonTemplate 'YouTube_Premium_result' 'No'
-        return
     elif [ -n "$isAvailable" ] && [ -n "$region" ]; then
-        echo -n -e "\r YouTube Premium:\t\t\t${Font_Green}Yes (Region: $region)${Font_Suffix}\n"
+        echo -n -e "\r YouTube Premium:\t${resultunlocktype}\t${Font_Green}Yes (Region: $region)${Font_Suffix}\n"
         modifyJsonTemplate 'YouTube_Premium_result' 'Yes' "${region}"
-        return
     elif [ -z "$region" ] && [ -n "$isAvailable" ]; then
-        echo -n -e "\r YouTube Premium:\t\t\t${Font_Green}Yes${Font_Suffix}\n"
+        echo -n -e "\r YouTube Premium:\t${resultunlocktype}\t${Font_Green}Yes${Font_Suffix}\n"
         modifyJsonTemplate 'YouTube_Premium_result' 'Yes'
-        return
     else
         echo -n -e "\r YouTube Premium:\t\t\t${Font_Red}Failed${Font_Suffix}\n"
         modifyJsonTemplate 'YouTube_Premium_result' 'Unknow'
+    fi
+}
+
+# 添加 DNS 检查相关函数
+Check_DNS_1() {
+    local tmpresult=$(curl $useNIC $usePROXY $xForward -sS --max-time 10 "https://dns.google/resolve?name=$1&type=A" 2>&1)
+    if [[ "$tmpresult" == "curl"* ]]; then
+        echo "9.9.9.9"
+        return
+    fi
+    local selected_ip=$(echo $tmpresult | grep -oE "([0-9]{1,3}\.){3}[0-9]{1,3}" | head -n1)
+    echo "$selected_ip"
+}
+
+Check_DNS_3() {
+    local tmpresult=$(curl $useNIC $usePROXY $xForward -sS --max-time 10 "https://cloudflare-dns.com/dns-query?name=$1&type=A" -H "accept: application/dns-json" 2>&1)
+    if [[ "$tmpresult" == "curl"* ]]; then
+        echo "8.8.8.8"
+        return
+    fi
+    local selected_ip=$(echo $tmpresult | grep -oE "([0-9]{1,3}\.){3}[0-9]{1,3}" | head -n1)
+    echo "$selected_ip"
+}
+
+Get_Unlock_Type() {
+    local result1=$1
+    local result2=$2
+    local result3=$3
+    
+    if [[ -n "$result1" && -n "$result2" && -n "$result3" ]]; then
+        echo -n -e "\t\t"
+    else
+        echo -n -e "\t\t\t"
     fi
 }
 
@@ -765,15 +808,9 @@ postData() {
 }
 
 printInfo() {
-    green_start='\033[32m'
-    color_end='\033[0m'
-
     echo
-    echo -e "${green_start}The code for this script to detect streaming media unlocking is all from the open source project https://github.com/lmc999/RegionRestrictionCheck , and the open source protocol is AGPL-3.0. This script is open source as required by the open source license. Thanks to the original author @lmc999 and everyone who made the pull request for this project for their contributions.${color_end}"
+    echo -e "${Font_Green}流媒体解锁检测脚本配置完成，已开始按设定的时间间隔运行检测。${Font_Suffix}"
     echo
-    echo -e "${green_start}Project: https://github.com/iamsaltedfish/check-stream-media${color_end}"
-    echo -e "${green_start}Version: 2023-08-07 v.2.0.1${color_end}"
-    echo -e "${green_start}Author: @iamsaltedfish${color_end}"
 }
 
 # 在文件开头添加 UUID 生成函数
@@ -791,7 +828,7 @@ MediaUnlockTest_DisneyPlus_Web() {
     fi
     
     local status_code=$(echo "$result" | grep -E "^HTTP.*" | awk '{print $2}')
-    # 提取区域代码，支持任何两字母的国家/地区代码
+    # 提取区域代码，支持任何两母的国家/地区代码
     local region=$(echo "$result" | grep -i "x-dss-country" | sed -n 's/.*x-dss-country=\([A-Z][A-Z]\).*/\1/Ip')
     
     if [[ "$status_code" == "200" ]]; then
@@ -840,7 +877,7 @@ getDNSConfig() {
         green "已选择使用API方式检测Disney+"
     fi
 
-    read -p "$(blue "请输入用于Netflix解锁检测的DNS服务器: ")" netflix_dns
+    read -p "$(blue "请输入使用Netflix解锁检测的DNS服务器: ")" netflix_dns
     if [[ -n "${netflix_dns}" ]]; then
         echo "${netflix_dns}" > /root/.csm.dns.netflix
         green "Netflix DNS服务器已设置为: ${netflix_dns}"
@@ -961,7 +998,7 @@ runCheck() {
     
     # YouTube Premium检测
     setDNSForTest "youtube"
-    MediaUnlockTest_YouTube_Premium 4
+    MediaUnlockTest_YouTube_Premium_Web 4
     restoreDNS
 
     # Discovery+检测
