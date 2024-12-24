@@ -826,7 +826,7 @@ getDNSConfig() {
         green "已选择使用API方式检测Disney+"
     fi
 
-    read -p "$(blue "请输入使用Netflix解锁检测���DNS服务器: ")" netflix_dns
+    read -p "$(blue "请输入使用Netflix解锁检测的DNS服务器: ")" netflix_dns
     if [[ -n "${netflix_dns}" ]]; then
         echo "${netflix_dns}" > /root/.csm.dns.netflix
         green "Netflix DNS服务器已设置为: ${netflix_dns}"
@@ -982,22 +982,24 @@ checkData()
 
 main() {
     echo
-    # 检查脚本是否在root目录
-    if [[ "$0" != "/root/csm.sh" ]]; then
-        # 确保脚本内容被正确保存
-        if [[ -f "$0" ]]; then
-            # 如果是本地文件，直接复制
-            cp -f "$0" /root/csm.sh
-            chmod +x /root/csm.sh
-            echo -e "${Font_Green}脚本已复制到 /root/csm.sh${Font_Suffix}"
-        else
-            # 如果是通过网络运行，直接下载保存
-            curl -Ls https://raw.githubusercontent.com/q42602736/check-stream-media/main/csm.sh > /root/csm.sh
-            chmod +x /root/csm.sh
-            echo -e "${Font_Green}脚本已下载到 /root/csm.sh${Font_Suffix}"
-        fi
-        # 执行新保存的脚本
-        exec /root/csm.sh
+    # 检查脚本是否是从网络下载运行的
+    if [[ "$0" == "bash" ]]; then
+        # 下载脚本到本地
+        curl -o /root/csm.sh https://raw.githubusercontent.com/q42602736/check-stream-media/main/csm.sh
+        chmod +x /root/csm.sh
+        echo -e "${Font_Green}脚本已下载到 /root/csm.sh${Font_Suffix}"
+        # 使用新下载的脚本继续执行
+        bash /root/csm.sh
+        exit 0
+    # 检查脚本是否已在root目录
+    elif [[ "$0" != "/root/csm.sh" ]]; then
+        # 如果不在root目录，复制到root目录
+        cp -f "$0" /root/csm.sh
+        chmod +x /root/csm.sh
+        echo -e "${Font_Green}脚本已复制到 /root/csm.sh${Font_Suffix}"
+        # 使用复制后的脚本继续执行
+        bash /root/csm.sh
+        exit 0
     fi
     
     checkOS
