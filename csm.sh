@@ -496,87 +496,36 @@ Get_Unlock_Type() {
 }
 
 MediaUnlockTest_DiscoveryPlus() {
-    if [ "${USE_IPV6}" == 1 ]; then
+    if [ "${1}" == "6" ]; then
         echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}IPv6 Not Support${Font_Suffix}\n"
         modifyJsonTemplate 'DiscoveryPlus_result' 'No' 'IPv6 Not Support'
         return
     fi
-
-    # 取得 API 网址
-    local tmpresult=$(curl $useNIC $usePROXY $xForward -${1} ${ssll} -s 'https://global-prod.disco-api.com/bootstrapInfo' -H 'accept: */*' -H 'accept-language: en-US,en;q=0.9' -H 'origin: https://www.discoveryplus.com' -H 'referer: https://www.discoveryplus.com/' -H "sec-ch-ua: ${UA_SEC_CH_UA}" -H 'sec-ch-ua-mobile: ?0' -H 'sec-ch-ua-platform: "Windows"' -H 'sec-fetch-dest: empty' -H 'sec-fetch-mode: cors' -H 'sec-fetch-site: cross-site' -H 'x-disco-client: WEB:UNKNOWN:dplus_us:2.46.0' -H 'x-disco-params: bid=dplus,hn=www.discoveryplus.com' 2>&1)
-    if [ -z "$tmpresult" ]; then
+    
+    local tmpresult=$(curl $useNIC $usePROXY $xForward -${1} ${ssll} -sS -o /dev/null -L --max-time 10 -w '%{url_effective}\n' "https://www.discoveryplus.com/" 2>&1)
+    
+    if [[ "${tmpresult}" == "curl"* ]]; then
         echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}Failed (Network Connection)${Font_Suffix}\n"
         modifyJsonTemplate 'DiscoveryPlus_result' 'Unknow'
         return
     fi
-
-    local baseApiUrl=$(echo "$tmpresult" | grep -woP '"baseApiUrl"\s{0,}:\s{0,}"\K[^"]+')
-    local realm=$(echo "$tmpresult" | grep -woP '"realm"\s{0,}:\s{0,}"\K[^"]+')
-
-    if [ -z "$baseApiUrl" ] || [ -z "$realm" ]; then
-        echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}Failed (Error: PAGE ERROR)${Font_Suffix}\n"
-        modifyJsonTemplate 'DiscoveryPlus_result' 'Unknow'
-        return
-    fi
-
-    if [ "$realm" == 'dplusapac' ]; then
+    
+    local isBlocked=$(echo "${tmpresult}" | grep 'geo-not-available')
+    local region=$(curl $useNIC $usePROXY $xForward -${1} ${ssll} -sS --max-time 10 "https://www.discoveryplus.com/de-DE" 2>&1 | grep 'country":' | sed 's/.*"country"://g' | cut -f1 -d',' | cut -f2 -d'"')
+    
+    if [ -n "$isBlocked" ] || [[ "${region}" == "null" ]]; then
         echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
         modifyJsonTemplate 'DiscoveryPlus_result' 'No'
         return
-    fi
-
-    local fakeDeviceId=$(gen_uuid | md5sum | cut -f1 -d' ')
-
-    local tmpresult1=$(curl $useNIC $usePROXY $xForward -${1} ${ssll} -s "${baseApiUrl}/token?deviceId=${fakeDeviceId}&realm=${realm}&shortlived=true" -H 'accept: */*' -H 'accept-language: en-US,en;q=0.9' -H 'origin: https://www.discoveryplus.com' -H 'referer: https://www.discoveryplus.com/' -H "sec-ch-ua: ${UA_SEC_CH_UA}" -H 'sec-ch-ua-mobile: ?0' -H 'sec-ch-ua-platform: "Windows"' -H 'sec-fetch-dest: empty' -H 'sec-fetch-mode: cors' -H 'sec-fetch-site: same-site' -H "x-device-info: dplus_us/2.46.0 (desktop/desktop; Windows/NT 10.0; ${fakeDeviceId})" -H 'x-disco-client: WEB:UNKNOWN:dplus_us:2.46.0' -H "x-disco-params: realm=${realm},bid=dplus,hn=www.discoveryplus.com,hth=,features=ar" 2>&1)
-    if [ -z "$tmpresult1" ]; then
-        echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}Failed (Network Connection 1)${Font_Suffix}\n"
-        modifyJsonTemplate 'DiscoveryPlus_result' 'Unknow'
+    elif [ -n "$region" ]; then
+        echo -n -e "\r Discovery+:\t\t\t\t${Font_Green}Yes (Region: ${region})${Font_Suffix}\n"
+        modifyJsonTemplate 'DiscoveryPlus_result' 'Yes' "${region}"
+        return
+    else
+        echo -n -e "\r Discovery+:\t\t\t\t${Font_Green}Yes${Font_Suffix}\n"
+        modifyJsonTemplate 'DiscoveryPlus_result' 'Yes'
         return
     fi
-
-    local token=$(echo "$tmpresult1" | grep -woP '"token"\s{0,}:\s{0,}"\K[^"]+')
-    if [ -z "$token" ]; then
-        echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}Failed (Error: PAGE ERROR 1)${Font_Suffix}\n"
-        modifyJsonTemplate 'DiscoveryPlus_result' 'Unknow'
-        return
-    fi
-
-    local tmpresult2=$(curl $useNIC $usePROXY $xForward -${1} ${ssll} -s "${baseApiUrl}/cms/routes/tabbed-home?include=default&decorators=viewingHistory,isFavorite,playbackAllowed,contentAction" -H 'accept: */*' -H 'accept-language: en-US,en;q=0.9' -H 'origin: https://www.discoveryplus.com' -H 'referer: https://www.discoveryplus.com/' -H "sec-ch-ua: ${UA_SEC_CH_UA}" -H 'sec-ch-ua-mobile: ?0' -H 'sec-ch-ua-platform: "Windows"' -H 'sec-fetch-dest: empty' -H 'sec-fetch-mode: cors' -H 'sec-fetch-site: same-site' -H 'x-disco-client: WEB:UNKNOWN:dplus_us:2.46.0' -H 'x-disco-params: realm=dplay,bid=dplus,hn=www.discoveryplus.com,hth=,features=ar' -b "st=${token}" 2>&1)
-    if [ -z "$tmpresult2" ]; then
-        echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}Failed (Network Connection 2)${Font_Suffix}\n"
-        modifyJsonTemplate 'DiscoveryPlus_result' 'Unknow'
-        return
-    fi
-
-    local isBlocked=$(echo "$tmpresult2" | grep -iE 'is unavailable in your|not yet available')
-    local isOK=$(echo "$tmpresult2" | grep -i 'relationships')
-    local region=$(echo "$tmpresult2" | grep -woP '"mainTerritoryCode"\s{0,}:\s{0,}"\K[^"]+' | tr a-z A-Z)
-
-    if [ -z "$isBlocked" ] && [ -z "$isOK" ]; then
-        echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}Failed (Error: PAGE ERROR 2)${Font_Suffix}\n"
-        modifyJsonTemplate 'DiscoveryPlus_result' 'Unknow'
-        return
-    fi
-
-    if [ -n "$isBlocked" ]; then
-        echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}No${Font_Suffix}\n"
-        modifyJsonTemplate 'DiscoveryPlus_result' 'No'
-        return
-    fi
-
-    if [ -n "$isOK" ]; then
-        if [ -n "$region" ]; then
-            echo -n -e "\r Discovery+:\t\t\t\t${Font_Green}Yes (Region: ${region})${Font_Suffix}\n"
-            modifyJsonTemplate 'DiscoveryPlus_result' 'Yes' "${region}"
-        else
-            echo -n -e "\r Discovery+:\t\t\t\t${Font_Green}Yes${Font_Suffix}\n"
-            modifyJsonTemplate 'DiscoveryPlus_result' 'Yes'
-        fi
-        return
-    fi
-
-    echo -n -e "\r Discovery+:\t\t\t\t${Font_Red}Failed (Error: Unknown)${Font_Suffix}\n"
-    modifyJsonTemplate 'DiscoveryPlus_result' 'Unknow'
 }
 
 MediaUnlockTest_ParamountPlus() {
@@ -1033,11 +982,24 @@ checkData()
 
 main() {
     echo
-    # 如果脚本不在root目录，则复制到root目录
-    if [[ "$0" != "/root/csm.sh" ]]; then
-        cp "$0" /root/csm.sh
+    # 检查脚本是否是从网络下载运行的
+    if [[ "$0" == "bash" ]]; then
+        # 下载脚本到本地
+        curl -o /root/csm.sh https://raw.githubusercontent.com/q42602736/check-stream-media/main/csm.sh
+        chmod +x /root/csm.sh
+        echo -e "${Font_Green}脚本已下载到 /root/csm.sh${Font_Suffix}"
+        # 使用新下载的脚本继续执行
+        bash /root/csm.sh
+        exit 0
+    # 检查脚本是否已在root目录
+    elif [[ "$0" != "/root/csm.sh" ]]; then
+        # 如果不在root目录，复制到root目录
+        cp -f "$0" /root/csm.sh
         chmod +x /root/csm.sh
         echo -e "${Font_Green}脚本已复制到 /root/csm.sh${Font_Suffix}"
+        # 使用复制后的脚本继续执行
+        bash /root/csm.sh
+        exit 0
     fi
     
     checkOS
