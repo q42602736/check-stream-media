@@ -34,7 +34,7 @@ install_iptables() {
     
     # 检查是否已安装iptables-persistent
     if dpkg -l | grep -qw iptables-persistent; then
-        echo -e "${YELLOW}iptables-persistent 已经���装！${PLAIN}"
+        echo -e "${YELLOW}iptables-persistent 已经安装！${PLAIN}"
     else
         echo -e "${GREEN}正在安装 iptables-persistent...${PLAIN}"
         # 预配置iptables-persistent，避免安装时的交互提示
