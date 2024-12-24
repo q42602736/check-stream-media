@@ -826,7 +826,7 @@ getDNSConfig() {
         green "已选择使用API方式检测Disney+"
     fi
 
-    read -p "$(blue "请输入使用Netflix解锁检测的DNS服务器: ")" netflix_dns
+    read -p "$(blue "请输入使用Netflix解锁检测���DNS服务器: ")" netflix_dns
     if [[ -n "${netflix_dns}" ]]; then
         echo "${netflix_dns}" > /root/.csm.dns.netflix
         green "Netflix DNS服务器已设置为: ${netflix_dns}"
@@ -991,12 +991,10 @@ main() {
             chmod +x /root/csm.sh
             echo -e "${Font_Green}脚本已复制到 /root/csm.sh${Font_Suffix}"
         else
-            # 如果是通过网络运行，保存当前脚本内容
-            cat > /root/csm.sh << 'EOF'
-$(cat "$0" 2>/dev/null || curl -Ls https://raw.githubusercontent.com/q42602736/check-stream-media/main/csm.sh)
-EOF
+            # 如果是通过网络运行，直接下载保存
+            curl -Ls https://raw.githubusercontent.com/q42602736/check-stream-media/main/csm.sh > /root/csm.sh
             chmod +x /root/csm.sh
-            echo -e "${Font_Green}脚本已保存到 /root/csm.sh${Font_Suffix}"
+            echo -e "${Font_Green}脚本已下载到 /root/csm.sh${Font_Suffix}"
         fi
         # 执行新保存的脚本
         exec /root/csm.sh
