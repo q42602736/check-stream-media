@@ -982,51 +982,38 @@ checkData()
 
 main() {
     echo
-    # 检查脚本是否是从网络直接执行
-    if [[ "$0" == "bash" ]]; then
-        # 先下载脚本
-        echo -e "${Font_Green}正在下载脚本...${Font_Suffix}"
+    # 如果脚本不在 /root/csm.sh，则下载/复制到该位置
+    if [[ "$0" != "/root/csm.sh" ]]; then
+        echo -e "${Font_Green}正在安装脚本到 /root/csm.sh ...${Font_Suffix}"
         
-        # 创建临时文件来保存脚本
+        # 创建临时文件
         tmp_script=$(mktemp)
         
-        # 下载脚本到临时文件
-        if ! curl -s -o "${tmp_script}" https://raw.githubusercontent.com/q42602736/check-stream-media/main/csm.sh; then
-            echo -e "${Font_Red}下载脚本失败，请检查网络连接${Font_Suffix}"
+        # 如果是从网络执行，下载脚本；否则复制当前脚本
+        if [[ "$0" == "bash" ]]; then
+            if ! curl -s -o "${tmp_script}" https://raw.githubusercontent.com/q42602736/check-stream-media/main/csm.sh; then
+                echo -e "${Font_Red}下载脚本失败，请检查网络连接${Font_Suffix}"
+                rm -f "${tmp_script}"
+                exit 1
+            fi
+        else
+            cp -f "$0" "${tmp_script}"
+        fi
+        
+        # 验证脚本内容
+        if [[ ! -s "${tmp_script}" ]] || ! grep -q "MediaUnlockTest_" "${tmp_script}"; then
+            echo -e "${Font_Red}脚本内容无效，请检查源文件${Font_Suffix}"
             rm -f "${tmp_script}"
             exit 1
         fi
         
-        # 检查下载的文件是否为空
-        if [[ ! -s "${tmp_script}" ]]; then
-            echo -e "${Font_Red}下载的脚本文件为空，请检查源文件是否存在${Font_Suffix}"
-            rm -f "${tmp_script}"
-            exit 1
-        fi
-        
-        # 检查文件内容是否正确（至少包含一些关键函数）
-        if ! grep -q "MediaUnlockTest_" "${tmp_script}"; then
-            echo -e "${Font_Red}下载的文件内容不正确，请检查源文件${Font_Suffix}"
-            rm -f "${tmp_script}"
-            exit 1
-        fi
-        
-        # 移动到最终位置
+        # 移动到最终位置并设置权限
         mv "${tmp_script}" /root/csm.sh
         chmod +x /root/csm.sh
         
-        echo -e "${Font_Green}脚本已下载到 /root/csm.sh${Font_Suffix}"
+        echo -e "${Font_Green}脚本已安装到 /root/csm.sh${Font_Suffix}"
         
-        # 使用新下载的脚本执行
-        exec bash /root/csm.sh
-        exit 0
-    # 检查脚本是否已在root目录
-    elif [[ "$0" != "/root/csm.sh" ]]; then
-        # 如果不在root目录，复制到root目录
-        cp -f "$0" /root/csm.sh
-        chmod +x /root/csm.sh
-        echo -e "${Font_Green}脚本已复制到 /root/csm.sh${Font_Suffix}"
-        # 使用复制后的脚本继续执行
+        # 执行安装好的脚本
         exec bash /root/csm.sh
         exit 0
     fi
