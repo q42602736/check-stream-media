@@ -989,8 +989,7 @@ main() {
         chmod +x /root/csm.sh
         echo -e "${Font_Green}脚本已下载到 /root/csm.sh${Font_Suffix}"
         # 使用新下载的脚本继续执行
-        bash /root/csm.sh
-        exit 0
+        exec /root/csm.sh
     # 检查脚本是否已在root目录
     elif [[ "$0" != "/root/csm.sh" ]]; then
         # 如果不在root目录，复制到root目录
@@ -998,8 +997,7 @@ main() {
         chmod +x /root/csm.sh
         echo -e "${Font_Green}脚本已复制到 /root/csm.sh${Font_Suffix}"
         # 使用复制后的脚本继续执行
-        bash /root/csm.sh
-        exit 0
+        exec /root/csm.sh
     fi
     
     checkOS
