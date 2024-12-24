@@ -982,21 +982,23 @@ checkData()
 
 main() {
     echo
-    # 检查脚本是否是从网络下载运行的
-    if [[ "$0" == "bash" ]]; then
-        # 下载脚本到本地
-        curl -o /root/csm.sh https://raw.githubusercontent.com/q42602736/check-stream-media/main/csm.sh
-        chmod +x /root/csm.sh
-        echo -e "${Font_Green}脚本已下载到 /root/csm.sh${Font_Suffix}"
-        # 使用新下载的脚本继续执行
-        exec /root/csm.sh
-    # 检查脚本是否已在root目录
-    elif [[ "$0" != "/root/csm.sh" ]]; then
-        # 如果不在root目录，复制到root目录
-        cp -f "$0" /root/csm.sh
-        chmod +x /root/csm.sh
-        echo -e "${Font_Green}脚本已复制到 /root/csm.sh${Font_Suffix}"
-        # 使用复制后的脚本继续执行
+    # 检查脚本是否在root目录
+    if [[ "$0" != "/root/csm.sh" ]]; then
+        # 确保脚本内容被正确保存
+        if [[ -f "$0" ]]; then
+            # 如果是本地文件，直接复制
+            cp -f "$0" /root/csm.sh
+            chmod +x /root/csm.sh
+            echo -e "${Font_Green}脚本已复制到 /root/csm.sh${Font_Suffix}"
+        else
+            # 如果是通过网络运行，保存当前脚本内容
+            cat > /root/csm.sh << 'EOF'
+$(cat "$0" 2>/dev/null || curl -Ls https://raw.githubusercontent.com/q42602736/check-stream-media/main/csm.sh)
+EOF
+            chmod +x /root/csm.sh
+            echo -e "${Font_Green}脚本已保存到 /root/csm.sh${Font_Suffix}"
+        fi
+        # 执行新保存的脚本
         exec /root/csm.sh
     fi
     
